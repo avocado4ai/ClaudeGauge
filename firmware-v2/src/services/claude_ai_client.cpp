@@ -1,5 +1,7 @@
 #include "claude_ai_client.h"
 #include "config.h"
+#include <WiFi.h>
+#include <WiFiClient.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <stdarg.h>

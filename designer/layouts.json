@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "board": "waveshare",
+  "board": "c6amoled",
   "screens": [
     {
       "name": "Claude.ai",
@@ -1207,8 +1207,8 @@
           {
             "id": "screen_title_0",
             "type": "screenTitle",
-            "x": 85,
-            "y": 1,
+            "x": 88,
+            "y": 0,
             "font": "md",
             "color": "CLR_AMBER",
             "text": "CLAUDE.AI",
@@ -1217,9 +1217,9 @@
           {
             "id": "v2_5h_clock",
             "type": "text",
-            "x": 92,
-            "y": 20,
-            "font": "24",
+            "x": 140,
+            "y": 64,
+            "font": "26",
             "color": "CLR_TEXT_BRIGHT",
             "text": "2:22:00",
             "datum": "TC"
@@ -1227,11 +1227,11 @@
           {
             "id": "v2_cai_5h",
             "type": "donutGauge",
-            "x": 95,
-            "y": 103,
+            "x": 136,
+            "y": 180,
             "color": "CLR_AMBER",
             "pct": 58,
-            "r": 20,
+            "r": 33,
             "thickness": 5,
             "scale": 2,
             "pctFont": "16",
@@ -1240,8 +1240,8 @@
           {
             "id": "v2_5h_bar",
             "type": "countdownBar",
-            "x": 149,
-            "y": 24,
+            "x": 216,
+            "y": 120,
             "w": 10,
             "h": 120,
             "color": "CLR_AMBER",
@@ -1250,17 +1250,17 @@
           {
             "id": "v2_div",
             "type": "vline",
-            "x": 171,
-            "y": 24,
-            "h": 120,
+            "x": 256,
+            "y": 64,
+            "h": 256,
             "color": "CLR_AMBER"
           },
           {
             "id": "v2_7d_clock",
             "type": "text",
-            "x": 239,
-            "y": 20,
-            "font": "24",
+            "x": 344,
+            "y": 68,
+            "font": "26",
             "color": "CLR_PEACH",
             "text": "7d 0h0m",
             "datum": "TC"
@@ -1268,11 +1268,11 @@
           {
             "id": "v2_cai_7d",
             "type": "donutGauge",
-            "x": 244,
-            "y": 104,
+            "x": 344,
+            "y": 184,
             "color": "CLR_LAVENDER",
             "pct": 45,
-            "r": 20,
+            "r": 32,
             "thickness": 5,
             "scale": 2,
             "pctFont": "16",
@@ -1281,8 +1281,8 @@
           {
             "id": "v2_7d_bar",
             "type": "countdownBar",
-            "x": 304,
-            "y": 24,
+            "x": 428,
+            "y": 124,
             "w": 10,
             "h": 120,
             "color": "CLR_LAVENDER",
@@ -1291,34 +1291,35 @@
           {
             "id": "frame_page",
             "type": "pageChip",
-            "x": 54,
-            "y": 157,
-            "w": 28,
-            "h": 14,
+            "x": 52,
+            "y": 352,
+            "w": 32,
+            "h": 20,
             "color": "CLR_PEACH"
           },
           {
             "id": "frame_signal_text",
             "type": "signalLabel",
-            "x": 171,
-            "y": 164,
-            "font": "14",
+            "x": 228,
+            "y": 352,
+            "font": "24",
             "color": "CLR_AMBER",
             "text": "SIGNAL"
           },
           {
             "id": "frame_signal_bars",
             "type": "frameSignalBars",
-            "x": 176,
-            "y": 158
+            "x": 236,
+            "y": 336,
+            "scale": 2.25
           },
           {
             "id": "frame_countdown",
             "type": "countdownPill",
-            "x": 200,
-            "y": 157,
-            "w": 120,
-            "h": 14,
+            "x": 284,
+            "y": 336,
+            "w": 160,
+            "h": 28,
             "color": "CLR_AMBER"
           }
         ]

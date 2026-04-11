@@ -13,7 +13,14 @@ public:
     bool isTouched();       // any touch event (for wake/activity)
 
 private:
-    static constexpr uint8_t CST816S_ADDR     = 0x15;
+#if defined(BOARD_C6_AMOLED)
+    // FT3168 (FocalTech) capacitive touch controller
+    static constexpr uint8_t TOUCH_ADDR       = 0x38;
+#else
+    // CST816S capacitive touch controller
+    static constexpr uint8_t TOUCH_ADDR       = 0x15;
+#endif
+
     static constexpr uint32_t DOUBLE_TAP_MS   = 400;  // max gap between taps
     static constexpr uint32_t TAP_DEBOUNCE_MS = 50;
 

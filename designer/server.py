@@ -36,7 +36,8 @@ PORT = 8080
 # Board name -> PlatformIO environment
 ENV_MAP = {
     "tdisplay": "tdisplays3",
-    "waveshare": "waveshare147"
+    "waveshare": "waveshare147",
+    "c6amoled": "c6amoled"
 }
 
 # ============================================================

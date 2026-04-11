@@ -15,7 +15,7 @@
 #define H_SM  16   // small font row height
 
 // Local helper: draw string with smooth font
-static void lcarsText(TFT_eSprite& spr, const char* text, int16_t x, int16_t y,
+static void lcarsText(GfxCanvas& spr, const char* text, int16_t x, int16_t y,
                       const uint8_t* font, uint16_t color,
                       uint8_t datum = TL_DATUM) {
     spr.loadFont(font);
@@ -26,7 +26,7 @@ static void lcarsText(TFT_eSprite& spr, const char* text, int16_t x, int16_t y,
 }
 
 // Section header: small colored dash + label text
-static void sectionHeader(TFT_eSprite& spr, int16_t x, int16_t y,
+static void sectionHeader(GfxCanvas& spr, int16_t x, int16_t y,
                            const char* label, uint16_t color) {
     spr.fillRect(x, y + 5, 3, 8, color);
     spr.loadFont(LCARS_SM);
@@ -38,7 +38,7 @@ static void sectionHeader(TFT_eSprite& spr, int16_t x, int16_t y,
 
 // Render custom text elements added via designer toolbox
 #ifdef CUSTOM_SCREEN_0_COUNT
-static void drawCustomElements(TFT_eSprite& spr, const CustomTextEl* els, int count) {
+static void drawCustomElements(GfxCanvas& spr, const CustomTextEl* els, int count) {
     for (int i = 0; i < count; i++) {
         lcarsText(spr, els[i].text, els[i].x, els[i].y, els[i].font, els[i].color);
     }
@@ -48,7 +48,7 @@ static void drawCustomElements(TFT_eSprite& spr, const CustomTextEl* els, int co
 // ================================================================
 // Screen 1: OVERVIEW - Cost & Token Usage
 // ================================================================
-void UIRenderer::drawOverview(TFT_eSprite& spr, const AppState& state,
+void UIRenderer::drawOverview(GfxCanvas& spr, const AppState& state,
                                uint32_t countdown) {
     UIWidgets::drawLcarsFrame(spr, "USAGE OVERVIEW",
         SCREEN_OVERVIEW, SCREEN_COUNT, countdown, state.wifi_connected, state.wifi_rssi);
@@ -127,7 +127,7 @@ void UIRenderer::drawOverview(TFT_eSprite& spr, const AppState& state,
 // ================================================================
 // Shared: Model breakdown screen content
 // ================================================================
-static void drawModelContent(TFT_eSprite& spr, const UsageData& usage) {
+static void drawModelContent(GfxCanvas& spr, const UsageData& usage) {
     if (!usage.valid || usage.model_count == 0) {
         lcarsText(spr, "NO MODEL DATA", CX + CW / 2, CY + CH / 2,
                   LCARS_MD, CLR_PEACH, MC_DATUM);
@@ -178,7 +178,7 @@ static void drawModelContent(TFT_eSprite& spr, const UsageData& usage) {
 // ================================================================
 // Shared: Claude Code metrics screen content
 // ================================================================
-static void drawCodeContent(TFT_eSprite& spr, const ClaudeCodeData& code) {
+static void drawCodeContent(GfxCanvas& spr, const ClaudeCodeData& code) {
     if (!code.valid) {
         lcarsText(spr, "NO CODE DATA", CX + CW / 2, CY + CH / 2,
                   LCARS_MD, CLR_PEACH, MC_DATUM);
@@ -243,7 +243,7 @@ static void drawCodeContent(TFT_eSprite& spr, const ClaudeCodeData& code) {
 // ================================================================
 // Screen 2: TODAY MODEL BREAKDOWN
 // ================================================================
-void UIRenderer::drawModels(TFT_eSprite& spr, const AppState& state,
+void UIRenderer::drawModels(GfxCanvas& spr, const AppState& state,
                              uint32_t countdown) {
     UIWidgets::drawLcarsFrame(spr, "TODAY MODEL ANALYSIS",
         SCREEN_MODELS, SCREEN_COUNT, countdown, state.wifi_connected, state.wifi_rssi);
@@ -264,7 +264,7 @@ void UIRenderer::drawModels(TFT_eSprite& spr, const AppState& state,
 // ================================================================
 // Screen 3: MONTHLY MODEL BREAKDOWN
 // ================================================================
-void UIRenderer::drawMonthlyModels(TFT_eSprite& spr, const AppState& state,
+void UIRenderer::drawMonthlyModels(GfxCanvas& spr, const AppState& state,
                                     uint32_t countdown) {
     UIWidgets::drawLcarsFrame(spr, "MONTHLY MODELS",
         SCREEN_MODELS_MONTHLY, SCREEN_COUNT, countdown, state.wifi_connected, state.wifi_rssi);
@@ -285,7 +285,7 @@ void UIRenderer::drawMonthlyModels(TFT_eSprite& spr, const AppState& state,
 // ================================================================
 // Screen 4: TODAY CLAUDE CODE METRICS
 // ================================================================
-void UIRenderer::drawClaudeCode(TFT_eSprite& spr, const AppState& state,
+void UIRenderer::drawClaudeCode(GfxCanvas& spr, const AppState& state,
                                  uint32_t countdown) {
     UIWidgets::drawLcarsFrame(spr, "TODAY CODE ANALYTICS",
         SCREEN_CODE, SCREEN_COUNT, countdown, state.wifi_connected, state.wifi_rssi);
@@ -306,7 +306,7 @@ void UIRenderer::drawClaudeCode(TFT_eSprite& spr, const AppState& state,
 // ================================================================
 // Screen 5: MONTHLY CLAUDE CODE METRICS
 // ================================================================
-void UIRenderer::drawMonthlyCode(TFT_eSprite& spr, const AppState& state,
+void UIRenderer::drawMonthlyCode(GfxCanvas& spr, const AppState& state,
                                   uint32_t countdown) {
     UIWidgets::drawLcarsFrame(spr, "MONTHLY CODE",
         SCREEN_CODE_MONTHLY, SCREEN_COUNT, countdown, state.wifi_connected, state.wifi_rssi);
@@ -327,7 +327,7 @@ void UIRenderer::drawMonthlyCode(TFT_eSprite& spr, const AppState& state,
 // ================================================================
 // Screen 6: STATUS / DIAGNOSTICS
 // ================================================================
-void UIRenderer::drawStatus(TFT_eSprite& spr, const AppState& state,
+void UIRenderer::drawStatus(GfxCanvas& spr, const AppState& state,
                               uint32_t countdown) {
     UIWidgets::drawLcarsFrame(spr, "SYSTEM STATUS",
         SCREEN_STATUS, SCREEN_COUNT, countdown, state.wifi_connected, state.wifi_rssi);
@@ -377,7 +377,11 @@ void UIRenderer::drawStatus(TFT_eSprite& spr, const AppState& state,
     UIWidgets::drawStatusRow(spr, ST_HEAP_X, ST_HEAP_Y, ST_HEAP_W, "Heap", heapBuf, CLR_PEACH);
 
     char psramBuf[16];
+#if BOARD_HAS_PSRAM
     snprintf(psramBuf, sizeof(psramBuf), "%lu KB", (unsigned long)(ESP.getFreePsram() / 1024));
+#else
+    snprintf(psramBuf, sizeof(psramBuf), "N/A");
+#endif
     UIWidgets::drawStatusRow(spr, ST_PSRAM_X, ST_PSRAM_Y, ST_PSRAM_W, "PSRAM", psramBuf, CLR_PEACH);
 
     uint32_t uptimeSec = (nowMs - state.uptime_start) / 1000;
@@ -407,7 +411,7 @@ void UIRenderer::drawStatus(TFT_eSprite& spr, const AppState& state,
 // Helper: Draw a limit row (label, reset time, segmented bar, %)
 // ================================================================
 // Draw a donut/arc gauge: filled arc from top (270°) clockwise
-static void drawDonutGauge(TFT_eSprite& spr, int16_t cx, int16_t cy,
+static void drawDonutGauge(GfxCanvas& spr, int16_t cx, int16_t cy,
                             int16_t r, int16_t thickness,
                             float pct, uint16_t fgColor, uint16_t bgColor,
                             const char* pctText,
@@ -450,7 +454,7 @@ static void drawDonutGauge(TFT_eSprite& spr, int16_t cx, int16_t cy,
 }
 
 // Draw a compact limit bar (no percentage text)
-static void drawLimitBar(TFT_eSprite& spr, int16_t x, int16_t y, int16_t w,
+static void drawLimitBar(GfxCanvas& spr, int16_t x, int16_t y, int16_t w,
                           const char* label, float utilization, uint16_t color) {
     // Label
     spr.fillRect(x, y + 4, 3, 8, color);
@@ -481,7 +485,7 @@ static void drawLimitBar(TFT_eSprite& spr, int16_t x, int16_t y, int16_t w,
 }
 
 // Draw a vertical countdown bar (fills from bottom)
-static void drawCountdownBar(TFT_eSprite& spr, int16_t x, int16_t y,
+static void drawCountdownBar(GfxCanvas& spr, int16_t x, int16_t y,
                               int16_t w, int16_t h, float pct, uint16_t color) {
     if (pct < 0.0f) pct = 0.0f;
     if (pct > 1.0f) pct = 1.0f;
@@ -506,7 +510,7 @@ static void formatResetCountdown(char* buf, size_t len, int32_t secs) {
 // ================================================================
 // Screen 7: CLAUDE.AI SUBSCRIPTION USAGE
 // ================================================================
-void UIRenderer::drawClaudeAi(TFT_eSprite& spr, const AppState& state,
+void UIRenderer::drawClaudeAi(GfxCanvas& spr, const AppState& state,
                                 uint32_t countdown) {
     UIWidgets::drawLcarsFrame(spr, "CLAUDE.AI USAGE",
         SCREEN_CLAUDEAI, SCREEN_COUNT, countdown, state.wifi_connected, state.wifi_rssi);

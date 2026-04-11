@@ -5,7 +5,19 @@
 #include <Wire.h>
 
 void TouchHandler::init() {
-    // Reset the CST816S
+#if defined(BOARD_C6_AMOLED)
+    // FT3168 — I2C already initialized by display manager
+    // No hardware reset pin on GPIO (goes through I/O expander)
+    pinMode(TOUCH_INT, INPUT);
+
+    Wire.beginTransmission(TOUCH_ADDR);
+    if (Wire.endTransmission() == 0) {
+        Serial.println("FT3168 touch controller found");
+    } else {
+        Serial.println("FT3168 touch controller NOT found");
+    }
+#else
+    // CST816S — Reset the chip via dedicated GPIO
     resetChip();
 
     // Initialize I2C on touch-specific pins
@@ -15,27 +27,32 @@ void TouchHandler::init() {
     pinMode(TOUCH_INT, INPUT);
 
     // Verify chip is present
-    Wire.beginTransmission(CST816S_ADDR);
+    Wire.beginTransmission(TOUCH_ADDR);
     if (Wire.endTransmission() == 0) {
         Serial.println("CST816S touch controller found");
     } else {
         Serial.println("CST816S touch controller NOT found");
     }
+#endif
 }
 
 void TouchHandler::resetChip() {
+#if !defined(BOARD_C6_AMOLED)
+    // CST816S has a dedicated reset GPIO
     pinMode(TOUCH_RST, OUTPUT);
     digitalWrite(TOUCH_RST, LOW);
     delay(10);
     digitalWrite(TOUCH_RST, HIGH);
     delay(50);
+#endif
+    // FT3168: no GPIO reset available (handled by I/O expander at display init)
 }
 
 uint8_t TouchHandler::readRegister(uint8_t reg) {
-    Wire.beginTransmission(CST816S_ADDR);
+    Wire.beginTransmission(TOUCH_ADDR);
     Wire.write(reg);
     Wire.endTransmission(false);
-    Wire.requestFrom(CST816S_ADDR, (uint8_t)1);
+    Wire.requestFrom(TOUCH_ADDR, (uint8_t)1);
     if (Wire.available()) {
         return Wire.read();
     }
@@ -43,7 +60,8 @@ uint8_t TouchHandler::readRegister(uint8_t reg) {
 }
 
 bool TouchHandler::readTouch() {
-    uint8_t points = readRegister(0x02);  // Number of touch points
+    // Register 0x02 = number of touch points (same for both CST816S and FT3168)
+    uint8_t points = readRegister(0x02);
     return (points > 0);
 }
 

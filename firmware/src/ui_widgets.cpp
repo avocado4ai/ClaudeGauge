@@ -4,7 +4,7 @@
 #include "config.h"
 
 // Helper: load smooth font, draw string, unload
-static void smoothText(TFT_eSprite& spr, const char* text, int16_t x, int16_t y,
+static void smoothText(GfxCanvas& spr, const char* text, int16_t x, int16_t y,
                         const uint8_t* font, uint16_t color, uint8_t datum = TL_DATUM) {
     spr.loadFont(font);
     spr.setTextDatum(datum);
@@ -14,7 +14,7 @@ static void smoothText(TFT_eSprite& spr, const char* text, int16_t x, int16_t y,
 }
 
 // Variant with custom background color (for text on colored chips)
-static void smoothTextBg(TFT_eSprite& spr, const char* text, int16_t x, int16_t y,
+static void smoothTextBg(GfxCanvas& spr, const char* text, int16_t x, int16_t y,
                           const uint8_t* font, uint16_t color, uint16_t bgColor,
                           uint8_t datum = TL_DATUM) {
     spr.loadFont(font);
@@ -28,7 +28,7 @@ static void smoothTextBg(TFT_eSprite& spr, const char* text, int16_t x, int16_t 
 // LCARS Elbow Drawing
 // ============================================================
 
-static void fillQuarterCircle(TFT_eSprite& spr, int16_t cx, int16_t cy,
+static void fillQuarterCircle(GfxCanvas& spr, int16_t cx, int16_t cy,
                                int16_t r, uint16_t color, uint8_t quadrant) {
     for (int16_t y = 0; y <= r; y++) {
         int16_t x = (int16_t)sqrtf((float)(r * r - y * y));
@@ -45,16 +45,26 @@ static void fillQuarterCircle(TFT_eSprite& spr, int16_t cx, int16_t cy,
 // LCARS Frame
 // ============================================================
 
-void UIWidgets::drawLcarsFrame(TFT_eSprite& spr, const char* title,
+void UIWidgets::drawLcarsFrame(GfxCanvas& spr, const char* title,
                                 uint8_t currentPage, uint8_t totalPages,
                                 uint32_t countdownSec, bool wifiOk,
                                 int16_t wifiRssi) {
-    spr.fillSprite(CLR_BG);
-
     const int16_t SW = SIDEBAR_W;
     const int16_t R  = ELBOW_R;
     const int16_t TH = TOPBAR_H;
     const int16_t BH = BOTBAR_H;
+
+    // ---- Partial clear (no full-screen flash) ----
+    // The static sidebar (x = 0..SW+R-1) repaints itself every frame, so it
+    // never needs a background clear — keeping it continuously visible is what
+    // eliminates the "all-black" flicker that a full fillScreen causes.
+    // We only clear:
+    //   (a) everything to the right of the sidebar/elbow column
+    //   (b) the 3-px scanning indicator strip on the sidebar's right edge
+    const int16_t segTop = TH + R + 2;
+    const int16_t segBot = SCR_H - BH - R - 2;
+    spr.fillRect(SW + R, 0, SCR_W - SW - R, SCR_H, CLR_BG);  // (a) content + bars
+    spr.fillRect(SW - 3, segTop, 3, segBot - segTop, CLR_BG); // (b) scan indicator strip
 
     bool blink = (millis() / 500) % 2;
 
@@ -64,8 +74,7 @@ void UIWidgets::drawLcarsFrame(TFT_eSprite& spr, const char* title,
     fillQuarterCircle(spr, SW, TH, R, CLR_BG, 2);
 
     // ========== SIDEBAR SEGMENTS ==========
-    int16_t segTop = TH + R + 2;
-    int16_t segBot = SCR_H - BH - R - 2;
+    // (segTop / segBot already declared above for the partial clear)
     int16_t segH   = segBot - segTop;
     uint16_t segColors[3] = { CLR_SALMON, CLR_LAVENDER, CLR_BLUE };
     const char* segNums[3] = { "01", "02", "03" };
@@ -180,8 +189,8 @@ void UIWidgets::drawLcarsFrame(TFT_eSprite& spr, const char* title,
     }
 
     // ========== SCANNING INDICATOR ==========
-    int16_t scanRange = segBot - segTop;
-    int16_t scanPos = segTop + (int16_t)((millis() / 20) % scanRange);
+    // The strip (SW-3 .. SW-1) was pre-cleared above so no old-position trail.
+    int16_t scanPos = segTop + (int16_t)((millis() / 20) % segH);
     spr.fillRect(SW - 3, scanPos, 3, 2, CLR_PEACH);
 }
 
@@ -189,7 +198,7 @@ void UIWidgets::drawLcarsFrame(TFT_eSprite& spr, const char* title,
 // Progress Bar
 // ============================================================
 
-void UIWidgets::drawProgressBar(TFT_eSprite& spr, int16_t x, int16_t y,
+void UIWidgets::drawProgressBar(GfxCanvas& spr, int16_t x, int16_t y,
                                  int16_t w, int16_t h, float percent,
                                  uint16_t fgColor, uint16_t bgColor) {
     float clamped = constrain(percent, 0.0f, 1.0f);
@@ -206,7 +215,7 @@ void UIWidgets::drawProgressBar(TFT_eSprite& spr, int16_t x, int16_t y,
 // Total height: ~22px (14px text area + 4px bar + gap)
 // ============================================================
 
-void UIWidgets::drawTokenRow(TFT_eSprite& spr, int16_t x, int16_t y,
+void UIWidgets::drawTokenRow(GfxCanvas& spr, int16_t x, int16_t y,
                               int16_t barW, const char* label, uint64_t value,
                               uint64_t maxValue, uint16_t color) {
     // Colored dot
@@ -228,7 +237,7 @@ void UIWidgets::drawTokenRow(TFT_eSprite& spr, int16_t x, int16_t y,
 // Signal Bars
 // ============================================================
 
-void UIWidgets::drawSignalBars(TFT_eSprite& spr, int16_t x, int16_t y,
+void UIWidgets::drawSignalBars(GfxCanvas& spr, int16_t x, int16_t y,
                                 int16_t rssi) {
     int bars = 0;
     if (rssi > -55) bars = 4;
@@ -248,7 +257,7 @@ void UIWidgets::drawSignalBars(TFT_eSprite& spr, int16_t x, int16_t y,
 // Separator
 // ============================================================
 
-void UIWidgets::drawSeparator(TFT_eSprite& spr, int16_t y) {
+void UIWidgets::drawSeparator(GfxCanvas& spr, int16_t y) {
     spr.drawFastHLine(CONTENT_X, y, CONTENT_W, CLR_TEXT_DIM);
 }
 
@@ -267,7 +276,7 @@ String UIWidgets::formatCount(uint64_t value) {
 // Cost Value
 // ============================================================
 
-void UIWidgets::drawCostValue(TFT_eSprite& spr, int16_t x, int16_t y,
+void UIWidgets::drawCostValue(GfxCanvas& spr, int16_t x, int16_t y,
                                float cost, const uint8_t* font, uint16_t color) {
     char buf[20];
     if (cost >= 1000.0f)
@@ -281,7 +290,7 @@ void UIWidgets::drawCostValue(TFT_eSprite& spr, int16_t x, int16_t y,
 // Label
 // ============================================================
 
-void UIWidgets::drawLabel(TFT_eSprite& spr, int16_t x, int16_t y,
+void UIWidgets::drawLabel(GfxCanvas& spr, int16_t x, int16_t y,
                            const char* text, uint16_t color, const uint8_t* font) {
     smoothText(spr, text, x, y, font, color);
 }
@@ -290,7 +299,7 @@ void UIWidgets::drawLabel(TFT_eSprite& spr, int16_t x, int16_t y,
 // Accept Bar  (height ~14px: label + percent + bar inline)
 // ============================================================
 
-void UIWidgets::drawAcceptBar(TFT_eSprite& spr, int16_t x, int16_t y,
+void UIWidgets::drawAcceptBar(GfxCanvas& spr, int16_t x, int16_t y,
                                int16_t barW, const char* label,
                                uint16_t accepted, uint16_t rejected,
                                uint16_t color) {
@@ -310,7 +319,7 @@ void UIWidgets::drawAcceptBar(TFT_eSprite& spr, int16_t x, int16_t y,
 // Status Row  (height ~14px)
 // ============================================================
 
-void UIWidgets::drawStatusRow(TFT_eSprite& spr, int16_t x, int16_t y,
+void UIWidgets::drawStatusRow(GfxCanvas& spr, int16_t x, int16_t y,
                                int16_t w, const char* label, const char* value,
                                uint16_t valueColor) {
     smoothText(spr, label, x, y, LCARS_SM, CLR_LAVENDER);
@@ -321,7 +330,7 @@ void UIWidgets::drawStatusRow(TFT_eSprite& spr, int16_t x, int16_t y,
 // Cost Row  (same layout as Token Row: dot + label + $value + bar)
 // ============================================================
 
-void UIWidgets::drawCostRow(TFT_eSprite& spr, int16_t x, int16_t y,
+void UIWidgets::drawCostRow(GfxCanvas& spr, int16_t x, int16_t y,
                              int16_t barW, const char* label, float costUsd,
                              float maxCost, uint16_t color) {
     // Colored dot

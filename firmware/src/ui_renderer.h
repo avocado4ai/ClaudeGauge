@@ -1,14 +1,14 @@
 #pragma once
 
-#include <TFT_eSPI.h>
+#include "gfx_canvas.h"
 #include "data_models.h"
 
 namespace UIRenderer {
-    void drawOverview(TFT_eSprite& spr, const AppState& state, uint32_t countdown);
-    void drawModels(TFT_eSprite& spr, const AppState& state, uint32_t countdown);
-    void drawMonthlyModels(TFT_eSprite& spr, const AppState& state, uint32_t countdown);
-    void drawClaudeCode(TFT_eSprite& spr, const AppState& state, uint32_t countdown);
-    void drawMonthlyCode(TFT_eSprite& spr, const AppState& state, uint32_t countdown);
-    void drawStatus(TFT_eSprite& spr, const AppState& state, uint32_t countdown);
-    void drawClaudeAi(TFT_eSprite& spr, const AppState& state, uint32_t countdown);
+    void drawOverview(GfxCanvas& spr, const AppState& state, uint32_t countdown);
+    void drawModels(GfxCanvas& spr, const AppState& state, uint32_t countdown);
+    void drawMonthlyModels(GfxCanvas& spr, const AppState& state, uint32_t countdown);
+    void drawClaudeCode(GfxCanvas& spr, const AppState& state, uint32_t countdown);
+    void drawMonthlyCode(GfxCanvas& spr, const AppState& state, uint32_t countdown);
+    void drawStatus(GfxCanvas& spr, const AppState& state, uint32_t countdown);
+    void drawClaudeAi(GfxCanvas& spr, const AppState& state, uint32_t countdown);
 }

@@ -422,7 +422,7 @@ void fetchAllData() {
 // Screen drawing
 // ============================================================
 void drawCurrentScreen() {
-    TFT_eSprite& spr = displayMgr.sprite();
+    GfxCanvas& spr = displayMgr.sprite();
     uint32_t countdown = getCountdownSec();
 
     switch (state.current_screen) {

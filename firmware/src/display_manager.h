@@ -1,6 +1,6 @@
 #pragma once
 
-#include <TFT_eSPI.h>
+#include "gfx_canvas.h"
 #include "data_models.h"
 
 class DisplayManager {
@@ -11,13 +11,20 @@ public:
     void showSetupScreen(const char* apName, const char* ip);
     void setBacklight(uint8_t level);
 
-    TFT_eSPI&    tft()    { return _tft; }
-    TFT_eSprite& sprite() { return _sprite; }
+    GfxCanvas& sprite() { return _sprite; }
 
     void pushSprite();
 
 private:
+#ifndef USE_ARDUINO_GFX
+    // ---- TFT_eSPI path (existing boards) ----
     TFT_eSPI    _tft;
-    TFT_eSprite _sprite = TFT_eSprite(&_tft);
-    uint8_t     _blLevel = 255;
+    GfxCanvas   _sprite = GfxCanvas(&_tft);
+#else
+    // ---- Arduino_GFX path (ESP32-C6 AMOLED) ----
+    Arduino_DataBus*  _bus     = nullptr;
+    Arduino_SH8601*   _display = nullptr;
+    GfxCanvas         _sprite;
+#endif
+    uint8_t _blLevel = 255;
 };

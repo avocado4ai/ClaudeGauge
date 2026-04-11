@@ -3,6 +3,12 @@
 // Phase 1: Claude.ai subscription tracking
 // ============================================================
 
+// <FS.h> must be included before <lcars.h> (→ TFT_eSPI) so that
+// "using namespace fs;" is established before TFT_eSPI sets FS_NO_GLOBALS
+// and re-includes FS.h (the include guard blocks re-processing).
+// Without this, WebServer.h's bare "FS" type reference fails to compile.
+#include <FS.h>
+
 #include <lcars.h>
 #include "app.h"
 #include "config.h"

@@ -1,6 +1,16 @@
 #pragma once
 
-#include <TFT_eSPI.h>
+#ifndef USE_ARDUINO_GFX
+  #include <TFT_eSPI.h>
+#else
+  // Minimal color constants when TFT_eSPI is not available
+  #ifndef TFT_BLACK
+    #define TFT_BLACK  0x0000
+  #endif
+  #ifndef TFT_WHITE
+    #define TFT_WHITE  0xFFFF
+  #endif
+#endif
 
 // ============================================================
 // LCARS Color Palette (Star Trek TNG authentic)
