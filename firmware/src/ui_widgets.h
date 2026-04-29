@@ -29,13 +29,48 @@ extern const uint8_t SmoothFont36[];
 #define SCR_W       SCR_WIDTH
 #define SCR_H       SCR_HEIGHT
 
-// Sidebar
-#define SIDEBAR_W   34
-#define ELBOW_R     14
+// ============================================================
+// LCARS FRAME LAYOUT — tune these values to adjust the frame
+// ============================================================
+//
+// Visual guide (portrait, top-left corner):
+//
+//   ┌─────────────────────────────────────┐
+//   │  SIDEBAR_W  │  TOPBAR_H (thickness) │ ← top bar
+//   │             │                        │
+//   │  ELBOW_R ──►├────────────────────────┘
+//   │  (corner    │
+//   │   curve)    │ ← sidebar continues down
+//   │             │
+//
+// SIDEBAR_W  = width of left sidebar column
+// ELBOW_R    = size of the square corner block connecting bar to sidebar
+// TOPBAR_H   = thickness of the top horizontal bar
+// BOTBAR_H   = thickness of the bottom horizontal bar
+// RIGHT_INSET  = how far bars stop short of right edge (for rounded display)
+// BOTTOM_INSET = how far bottom bar sits above screen bottom (for rounded display)
+// SEG2_X     = where the CLAUDE.AI pill starts (x position)
+// ============================================================
 
-// Bars
-#define TOPBAR_H    18
-#define BOTBAR_H    16
+#if SCR_H >= 300
+  // ---- C6 AMOLED (368×448) ----
+  #define SIDEBAR_W      40   // sidebar column width
+  #define ELBOW_R        0   // corner block size (square, connects bar to sidebar)
+  #define TOPBAR_H       44   // top bar thickness — increase to make top bar thicker
+  #define BOTBAR_H       44   // bottom bar thickness — increase to make bottom bar thicker
+  #define RIGHT_INSET    28   // right edge margin (display has rounded corners)
+  #define BOTTOM_INSET   16   // bottom edge margin (display has rounded corners)
+  #define SEG2_X         210  // x position where CLAUDE.AI pill starts
+#else
+  // ---- T-Display-S3 / Waveshare 1.47 (320×170) ----
+  #define SIDEBAR_W      34
+  #define ELBOW_R        14
+  #define TOPBAR_H       18
+  #define BOTBAR_H       16
+  #define RIGHT_INSET    0
+  #define BOTTOM_INSET   0
+  #define SEG2_X         210
+#endif
 #define BAR_GAP     3
 
 // Content area (inside the LCARS frame)

@@ -27,6 +27,9 @@ DESIGNER_DIR = Path(__file__).parent.resolve()
 PROJECT_ROOT = DESIGNER_DIR.parent
 FIRMWARE_V1_DIR = PROJECT_ROOT / "firmware"
 FIRMWARE_V2_DIR = PROJECT_ROOT / "firmware-v2"
+FIRMWARE_LCARS_DIR = Path("i:/2026/lcars-esp32")
+FIRMWARE_V3_DIR = PROJECT_ROOT / "firmware-v3"
+HEADER_V3_FILE = FIRMWARE_V3_DIR / "include" / "screen_layouts_v3.h"
 LAYOUTS_FILE = DESIGNER_DIR / "layouts.json"
 HEADER_FILE = FIRMWARE_V1_DIR / "include" / "screen_layouts.h"
 HEADER_V2_FILE = FIRMWARE_V2_DIR / "include" / "screen_layouts.h"
@@ -363,6 +366,34 @@ def generate_header_v2(layouts: dict) -> str:
             if el_type in ("countdownBar", "statusRow") and "color" in el:
                 lines.append(f"#define {define_name}_COLOR  {map_color(el['color'])}")
 
+            # Data binding (V3 data source)
+            ds = el.get("dataSource", "")
+            if ds and ds != "none":
+                bind_map = {
+                    "ai_5h_pct": "BIND_AI_5H_PCT",
+                    "ai_7d_pct": "BIND_AI_7D_PCT",
+                    "ai_7d_opus_pct": "BIND_AI_7D_OPUS_PCT",
+                    "ai_7d_sonnet_pct": "BIND_AI_7D_SONNET_PCT",
+                    "cost_today": "BIND_COST_TODAY",
+                    "cost_month": "BIND_COST_MONTH",
+                    "tokens_input_pct": "BIND_TOKENS_INPUT_PCT",
+                    "tokens_output_pct": "BIND_TOKENS_OUTPUT_PCT",
+                    "cc_sessions": "BIND_CC_SESSIONS",
+                    "cc_lines_add": "BIND_CC_LINES_ADD",
+                    "cc_lines_rm": "BIND_CC_LINES_RM",
+                    "cc_commits": "BIND_CC_COMMITS",
+                    "cc_prs": "BIND_CC_PRS",
+                    "cc_cost": "BIND_CC_COST",
+                    "cc_edit_pct": "BIND_CC_EDIT_PCT",
+                    "wifi_rssi": "BIND_WIFI_RSSI",
+                    "ai_5h_clock": "BIND_AI_5H_CLOCK",
+                    "ai_7d_clock": "BIND_AI_7D_CLOCK",
+                    "uptime": "BIND_UPTIME",
+                    "free_heap": "BIND_FREE_HEAP",
+                }
+                bind_val = bind_map.get(ds, "BIND_NONE")
+                lines.append(f"#define {define_name}_BIND  {bind_val}")
+
         lines.append("")
 
     # Frame chrome defines (shared across screens, use first occurrence)
@@ -391,6 +422,68 @@ def generate_header_v2(layouts: dict) -> str:
             if "text" in el:
                 lines.append(f'#define {define_name}_TEXT  "{el["text"]}"')
         lines.append("")
+
+    # Generate bound element arrays per screen (for data-driven rendering)
+    bind_map = {
+        "ai_5h_pct": "BIND_AI_5H_PCT", "ai_7d_pct": "BIND_AI_7D_PCT",
+        "ai_7d_opus_pct": "BIND_AI_7D_OPUS_PCT", "ai_7d_sonnet_pct": "BIND_AI_7D_SONNET_PCT",
+        "cost_today": "BIND_COST_TODAY", "cost_month": "BIND_COST_MONTH",
+        "tokens_input_pct": "BIND_TOKENS_INPUT_PCT", "tokens_output_pct": "BIND_TOKENS_OUTPUT_PCT",
+        "cc_sessions": "BIND_CC_SESSIONS", "cc_lines_add": "BIND_CC_LINES_ADD",
+        "cc_lines_rm": "BIND_CC_LINES_RM", "cc_commits": "BIND_CC_COMMITS",
+        "cc_prs": "BIND_CC_PRS", "cc_cost": "BIND_CC_COST",
+        "cc_edit_pct": "BIND_CC_EDIT_PCT", "wifi_rssi": "BIND_WIFI_RSSI",
+        "ai_5h_clock": "BIND_AI_5H_CLOCK", "ai_7d_clock": "BIND_AI_7D_CLOCK",
+        "uptime": "BIND_UPTIME", "free_heap": "BIND_FREE_HEAP",
+    }
+    type_map = {
+        "donutGauge": "BTYPE_GAUGE", "progressBar": "BTYPE_BAR",
+        "text": "BTYPE_TEXT", "cost": "BTYPE_TEXT",
+    }
+    # Build custom elements lookup by screen index
+    custom_by_screen = {}
+    for ce in layouts.get("customElements", []):
+        si = ce.get("screen", -1)
+        if si >= 0 and ce.get("elements"):
+            custom_by_screen[si] = ce["elements"]
+
+    has_bound = False
+    for si, screen in enumerate(layouts.get("screens", [])):
+        bound = []
+        # Check both screen elements and custom elements
+        all_els = list(screen.get("elements", []))
+        all_els.extend(custom_by_screen.get(si, []))
+        for el in all_els:
+            ds = el.get("dataSource", "")
+            if ds and ds != "none" and ds in bind_map:
+                etype = el.get("type", "text")
+                bound.append((el, ds, etype))
+        if bound:
+            if not has_bound:
+                lines.append("// ---- Data-Bound Elements ----")
+                lines.append('#include "data_bindings.h"')
+                lines.append("enum BoundElType { BTYPE_GAUGE = 0, BTYPE_BAR, BTYPE_TEXT };")
+                lines.append("struct BoundElement { int16_t x, y; int16_t w, h; BoundElType type; DataBinding bind; int16_t r; int16_t thk; uint8_t fontSize; };")
+                lines.append("")
+                has_bound = True
+            arr_name = f"V3_BOUND_SCREEN_{si}"
+            lines.append(f"static const BoundElement {arr_name}[] = {{")
+            for el, ds, etype in bound:
+                x = el.get("x", 0)
+                y = el.get("y", 0)
+                w = el.get("w", 0)
+                h = el.get("h", 0)
+                btype = type_map.get(etype, "BTYPE_TEXT")
+                bval = bind_map[ds]
+                r = int(el.get("r", 0) * el.get("scale", 1))
+                thk = max(2, int(el.get("thickness", 7) * el.get("scale", 1))) if etype == "donutGauge" else 0
+                # Map font key to pixel size for text elements
+                font_size_map = {"builtin": 8, "sm": 12, "14": 14, "16": 16, "md": 18, "20": 20, "22": 22, "24": 24, "26": 26, "lg": 28, "xl": 36}
+                fontSize = font_size_map.get(el.get("font", "md"), 18)
+                lines.append(f"    {{ {x}, {y}, {w}, {h}, {btype}, {bval}, {r}, {thk}, {fontSize} }},")
+            lines.append("};")
+            lines.append(f"#define {arr_name}_COUNT  {len(bound)}")
+            lines.append("")
 
     return "\n".join(lines) + "\n"
 
@@ -747,7 +840,21 @@ class DesignerHandler(http.server.SimpleHTTPRequestHandler):
             firmware = data.get("firmware", "v1")
             env = ENV_MAP.get(board, "tdisplays3")
 
-            if firmware == "v1":
+            if firmware == "v3":
+                # V3: Generate layout header, then build
+                if LAYOUTS_FILE.exists():
+                    layouts = json.loads(LAYOUTS_FILE.read_text(encoding="utf-8"))
+                    v3_data = layouts.get("v3", {})
+                    if v3_data.get("screens"):
+                        header_content = generate_header_v2(v3_data)  # same format as v2
+                        HEADER_V3_FILE.parent.mkdir(parents=True, exist_ok=True)
+                        HEADER_V3_FILE.write_text(header_content, encoding="utf-8")
+                        print(f"  Generated v3 {HEADER_V3_FILE.name}")
+                build_id = build_manager.start_build(env, project_dir=FIRMWARE_V3_DIR)
+            elif firmware == "lcars":
+                # lcars-esp32 engine demo: no header generation, just build
+                build_id = build_manager.start_build(env, project_dir=FIRMWARE_LCARS_DIR)
+            elif firmware == "v1":
                 # v1: Generate header from saved layouts, then build
                 if not LAYOUTS_FILE.exists():
                     self._send_json({"error": "No layouts.json found. Save first."}, status=400)
@@ -791,7 +898,19 @@ class DesignerHandler(http.server.SimpleHTTPRequestHandler):
             firmware = data.get("firmware", "v1")
             env = ENV_MAP.get(board, "tdisplays3")
 
-            if firmware == "v1":
+            if firmware == "v3":
+                # Generate layout header first
+                if LAYOUTS_FILE.exists():
+                    layouts = json.loads(LAYOUTS_FILE.read_text(encoding="utf-8"))
+                    v3_data = layouts.get("v3", {})
+                    if v3_data.get("screens"):
+                        header_content = generate_header_v2(v3_data)
+                        HEADER_V3_FILE.parent.mkdir(parents=True, exist_ok=True)
+                        HEADER_V3_FILE.write_text(header_content, encoding="utf-8")
+                project_dir = FIRMWARE_V3_DIR
+            elif firmware == "lcars":
+                project_dir = FIRMWARE_LCARS_DIR
+            elif firmware == "v1":
                 # Generate header first (same as build)
                 if LAYOUTS_FILE.exists():
                     layouts = json.loads(LAYOUTS_FILE.read_text(encoding="utf-8"))

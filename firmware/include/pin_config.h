@@ -90,6 +90,11 @@
     #define IO_EXP_PIN_LCD_EN1  4
     #define IO_EXP_PIN_LCD_EN2  5
 
+    // AXP2101 Power Management IC (shared I2C bus with touch)
+    #define HAS_PMU         1
+    // XPOWERS_CHIP_AXP2101 defined via build_flags in platformio.ini
+    #define PMU_I2C_ADDR    0x34
+
     // SD Card (optional)
     #define SD_CLK      11
     #define SD_CMD      10

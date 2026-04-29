@@ -7,6 +7,9 @@
 #ifdef USE_ARDUINO_GFX
   #include <Wire.h>
   #include <Adafruit_XCA9554.h>
+  #ifdef XPOWERS_CHIP_AXP2101
+    #include <XPowersLib.h>
+  #endif
 #endif
 
 // Local helper: draw string with smooth font
@@ -53,8 +56,40 @@ void DisplayManager::init() {
     // Arduino_GFX path (ESP32-C6 AMOLED — SH8601 via QSPI)
     // ================================================================
 
-    // Initialize I2C for touch + I/O expander
+    // Initialize I2C for touch + I/O expander + PMU
     Wire.begin(TOUCH_SDA, TOUCH_SCL);
+
+    // Initialize AXP2101 PMIC — configure charging only.
+    // DO NOT reconfigure power rails (DC1, BLDO1, etc.) — the factory OTP
+    // defaults are correct. Changing them can brick the board.
+    #ifdef XPOWERS_CHIP_AXP2101
+    {
+        XPowersPMU pmu;
+        if (pmu.begin(Wire, AXP2101_SLAVE_ADDRESS, TOUCH_SDA, TOUCH_SCL)) {
+            Serial.println("[PMU] AXP2101 found");
+
+            // Battery charging — safe to configure, doesn't affect running rails.
+            // These are the EXACT settings proven to work on hardware via the
+            // test_battery sketch. DO NOT add setDC*/enableDC*/setBLDO*/enableBLDO*
+            // calls — those will brick the board.
+            pmu.setChargerConstantCurr(XPOWERS_AXP2101_CHG_CUR_200MA);
+            pmu.setChargeTargetVoltage(XPOWERS_AXP2101_CHG_VOL_4V2);
+            pmu.setPrechargeCurr(XPOWERS_AXP2101_PRECHARGE_50MA);
+            pmu.setChargerTerminationCurr(XPOWERS_AXP2101_CHG_ITERM_25MA);
+
+            // Enable read-only ADC measurements (safe)
+            pmu.enableBattDetection();
+            pmu.enableBattVoltageMeasure();
+            pmu.enableVbusVoltageMeasure();
+            pmu.enableSystemVoltageMeasure();
+            pmu.enableTemperatureMeasure();
+
+            Serial.printf("[PMU] Battery voltage: %dmV\n", pmu.getBattVoltage());
+        } else {
+            Serial.println("[PMU] AXP2101 not found — running on USB power only");
+        }
+    }
+    #endif
 
     // Initialize TCA9554 I/O expander — must enable display before any QSPI
     Adafruit_XCA9554 expander;
@@ -106,59 +141,84 @@ void DisplayManager::init() {
 }
 
 void DisplayManager::showSplash() {
-    // Use the real LCARS frame
     UIWidgets::drawLcarsFrame(_sprite, "LCARS v2.0", 0, 1, 0, false);
 
-    // Centered content
     int16_t cx = CONTENT_X + CONTENT_W / 2;
     int16_t cy = CONTENT_Y + CONTENT_H / 2;
 
+#if SCR_H >= 300  // Tall portrait screen (C6 AMOLED 448px)
+    lcarsText(_sprite, "CLAUDE", cx, cy - 50, LCARS_XL, CLR_PEACH, MC_DATUM);
+    lcarsText(_sprite, "USAGE MONITOR", cx, cy + 4, LCARS_LG, CLR_PEACH, MC_DATUM);
+    lcarsText(_sprite, "INITIALIZING...", cx, cy + 50, LCARS_MD, CLR_LAVENDER, MC_DATUM);
+#else
     lcarsText(_sprite, "CLAUDE", cx, cy - 28, LCARS_LG, CLR_PEACH, MC_DATUM);
     lcarsText(_sprite, "USAGE MONITOR", cx, cy + 4, LCARS_LG, CLR_PEACH, MC_DATUM);
     lcarsText(_sprite, "INITIALIZING...", cx, cy + 34, LCARS_SM, CLR_LAVENDER, MC_DATUM);
+#endif
 
     pushSprite();
 }
 
 void DisplayManager::showConnecting(const char* status) {
-    // Use the real LCARS frame
     UIWidgets::drawLcarsFrame(_sprite, "CONNECTING", 0, 1, 0, false);
 
-    // Centered content
     int16_t cx = CONTENT_X + CONTENT_W / 2;
     int16_t cy = CONTENT_Y + CONTENT_H / 2;
 
+#if SCR_H >= 300  // Tall portrait screen (C6 AMOLED 448px)
+    lcarsText(_sprite, "INITIALIZING", cx, cy - 36, LCARS_LG, CLR_PEACH, MC_DATUM);
+    lcarsText(_sprite, status, cx, cy + 10, LCARS_MD, CLR_LAVENDER, MC_DATUM);
+    static uint8_t dotCount = 0;
+    dotCount = (dotCount + 1) % 4;
+    int16_t dotY = cy + 46;
+    for (int i = 0; i < dotCount; i++) {
+        _sprite.fillRoundRect(cx - 45 + i * 30, dotY, 18, 10, 5, CLR_AMBER);
+    }
+#else
     lcarsText(_sprite, "INITIALIZING", cx, cy - 22, LCARS_LG, CLR_PEACH, MC_DATUM);
     lcarsText(_sprite, status, cx, cy + 12, LCARS_MD, CLR_LAVENDER, MC_DATUM);
-
-    // Animated dots
     static uint8_t dotCount = 0;
     dotCount = (dotCount + 1) % 4;
     int16_t dotY = cy + 30;
     for (int i = 0; i < dotCount; i++) {
         _sprite.fillRoundRect(cx - 30 + i * 20, dotY, 12, 8, 4, CLR_AMBER);
     }
+#endif
 
     pushSprite();
 }
 
 void DisplayManager::showSetupScreen(const char* apName, const char* ip) {
-    // Use the real LCARS frame
     UIWidgets::drawLcarsFrame(_sprite, "SETUP REQUIRED", 0, 1, 0, false);
 
+    char url[40];
+    snprintf(url, sizeof(url), "http://%s", ip);
+
+#if SCR_H >= 300  // Tall portrait screen (C6 AMOLED 448px)
+    // Vertically center content block in the large content area.
+    // Block height: label(24) + gap(16) + ssid(36) + gap(32) + label(24) + gap(16) + url(28) = 176px
+    const int16_t blockH = 24 + 16 + 36 + 32 + 24 + 16 + 28;
+    int16_t x = CONTENT_X + 8;
+    int16_t y = CONTENT_Y + (CONTENT_H - blockH) / 2;
+
+    lcarsText(_sprite, "Connect to WiFi:", x, y, LCARS_24, CLR_LAVENDER);
+    y += 24 + 16;
+    lcarsText(_sprite, apName, x, y, LCARS_XL, CLR_AMBER);
+    y += 36 + 32;
+    lcarsText(_sprite, "Then open:", x, y, LCARS_24, CLR_LAVENDER);
+    y += 24 + 16;
+    lcarsText(_sprite, url, x, y, LCARS_LG, CLR_PEACH);
+#else
     int16_t x = CONTENT_X;
     int16_t y = CONTENT_Y;
-
     lcarsText(_sprite, "Connect to WiFi:", x, y, LCARS_SM, CLR_LAVENDER);
     y += 18;
     lcarsText(_sprite, apName, x, y, LCARS_MD, CLR_AMBER);
     y += 28;
-
     lcarsText(_sprite, "Then open:", x, y, LCARS_SM, CLR_LAVENDER);
     y += 18;
-    char url[40];
-    snprintf(url, sizeof(url), "http://%s", ip);
     lcarsText(_sprite, url, x, y, LCARS_MD, CLR_PEACH);
+#endif
 
     pushSprite();
 }

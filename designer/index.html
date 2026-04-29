@@ -534,12 +534,14 @@ canvas {
         <select id="firmwareSelect">
             <option value="v1">v1 (7 screens)</option>
             <option value="v2">v2 (lcars-esp32)</option>
+            <option value="v3">v3 (lcars engine)</option>
+            <option value="lcars">LCARS Engine Demo</option>
         </select>
         <label>Board:</label>
         <select id="boardSelect">
             <option value="tdisplay">T-Display-S3 (320x170)</option>
             <option value="waveshare">Waveshare 1.47 (320x172)</option>
-            <option value="c6amoled">ESP32-C6 AMOLED 1.8" (448x368)</option>
+            <option value="c6amoled">ESP32-C6 AMOLED 1.8" (368x448)</option>
         </select>
         <label>Zoom:</label>
         <select id="zoomSelect">
@@ -705,24 +707,46 @@ const COLORS = {
 const BOARDS = {
     tdisplay:  { name: 'T-Display-S3', w: 320, h: 170 },
     waveshare: { name: 'Waveshare 1.47', w: 320, h: 172 },
-    c6amoled:  { name: 'ESP32-C6 AMOLED 1.8"', w: 448, h: 368 }
+    c6amoled:  { name: 'ESP32-C6 AMOLED 1.8"', w: 368, h: 448 }
 };
 
 let SCR_W = 320, SCR_H = 170;
-let activeFirmware = 'v1';  // 'v1' or 'v2'
-const SIDEBAR_W = 34;
+let activeFirmware = 'v1';  // 'v1', 'v2', 'v3', or 'lcars'
+let SIDEBAR_W = 34;
 let ELBOW_R = 14, TOPBAR_H = 18, BOTBAR_H = 16, BAR_GAP = 3;
 let CONTENT_X, CONTENT_Y, CONTENT_W, CONTENT_H;
 
 // Frame constants per firmware version
 const FRAME_PARAMS = {
-    v1: { elbowR: 14, contentPadX: 4, contentPadY: 12, contentPadBottom: 4 },
-    v2: { elbowR: 16, contentPadX: 4, contentPadY: 4,  contentPadBottom: 6 }
+    v1:    { sidebarW: 34, elbowR: 14, topbarH: 18, botbarH: 16, contentPadX: 4, contentPadY: 12, contentPadBottom: 4 },
+    v2:    { sidebarW: 34, elbowR: 16, topbarH: 18, botbarH: 16, contentPadX: 4, contentPadY: 4,  contentPadBottom: 6 },
+    v3:    { sidebarW: 44, elbowR: 24, topbarH: 36, botbarH: 36, contentPadX: 4, contentPadY: 4,  contentPadBottom: 6 },
+    lcars: { sidebarW: 34, elbowR: 16, topbarH: 18, botbarH: 16, contentPadX: 4, contentPadY: 4,  contentPadBottom: 6 }
+};
+
+// TNG theme colors (matches lcars-esp32 engine)
+const TNG = {
+    elbowTop:    '#FF9966',  // LCARS_BUTTERSCOTCH
+    elbowBottom: '#CC99CC',  // LCARS_LAVENDER
+    barTop:      '#FF9900',  // LCARS_AMBER
+    barBottom:   '#CC9966',  // LCARS_TAN
+    sidebar:     ['#FF8866', '#CC99CC', '#FF5555', '#CC99FF'],
+    text:        '#FFCC99',  // LCARS_SUNFLOWER
+    textDim:     '#888888',
+    accent:      '#FFAA00',  // LCARS_GOLD
+    progress:    '#99CCFF',  // LCARS_ICE
+    barTrack:    '#1A1A1A',
+    statusOk:    '#99CCFF',
+    statusErr:   '#FF2200',
+    textOnBar:   '#000000',
 };
 
 function recalcLayout() {
-    const fp = FRAME_PARAMS[activeFirmware];
+    const fp = FRAME_PARAMS[activeFirmware] || FRAME_PARAMS.v1;
+    SIDEBAR_W = fp.sidebarW;
     ELBOW_R = fp.elbowR;
+    TOPBAR_H = fp.topbarH || 18;
+    BOTBAR_H = fp.botbarH || 16;
     CONTENT_X = SIDEBAR_W + ELBOW_R + fp.contentPadX;
     CONTENT_Y = TOPBAR_H + fp.contentPadY;
     CONTENT_W = SCR_W - CONTENT_X - 2;
@@ -920,6 +944,23 @@ const FW_SCREENS = {
             'Status':     (CX, CY, CW, CH) => buildStatusV2(CX, CY, CW, CH),
             'Setup':      (CX, CY, CW, CH) => buildSetupV2(CX, CY, CW, CH),
         }
+    },
+    v3: {
+        // V3: lcars-esp32 engine on C6 AMOLED (368x448 portrait)
+        // Starts with same 3 screens as V2, user can add more via + tab
+        names: ['Claude.ai', 'Status', 'Setup'],
+        titles: ['CLAUDE.AI', 'DIAGNOSTICS', ''],
+        builders: {
+            'Claude.ai':  (CX, CY, CW, CH) => buildClaudeAiV3(CX, CY, CW, CH),
+            'Status':     (CX, CY, CW, CH) => buildStatusV3(CX, CY, CW, CH),
+            'Setup':      (CX, CY, CW, CH) => buildSetupV2(CX, CY, CW, CH),
+        }
+    },
+    lcars: {
+        // LCARS engine demo — no editable screens
+        names: ['Demo'],
+        titles: ['LCARS DEMO'],
+        builders: { 'Demo': () => [] }
     }
 };
 
@@ -929,9 +970,13 @@ let SCREEN_BUILDERS = FW_SCREENS.v1.builders;
 
 // Screen title position (in the top bar)
 let TITLE_X = SIDEBAR_W + ELBOW_R + 4;
-const TITLE_Y = 1;
+let TITLE_Y = 1;
 
 function makeScreenTitle(title, idx) {
+    if (activeFirmware === 'v3') {
+        // V3: dark text on the amber bar, larger font for 36px bar
+        return { type: 'screenTitle', x: TITLE_X, y: TITLE_Y, text: title, font: '22', color: TNG.textOnBar, datum: 'ML', id: `screen_title_${idx}` };
+    }
     return { type: 'screenTitle', x: TITLE_X, y: TITLE_Y, text: title, font: 'md', color: 'CLR_AMBER', datum: 'ML', id: `screen_title_${idx}` };
 }
 
@@ -1309,6 +1354,163 @@ function buildSetupV2(CX, CY, CW, CH) {
     return elements;
 }
 
+// ============================================================
+// V3 Screen Builders (match firmware-v3 lcars-esp32 screens)
+// Portrait 368x448 — more vertical space, single column layouts
+// ============================================================
+
+function buildOverviewV3(CX, CY, CW, CH) {
+    const d = sampleData;
+    const els = [];
+    let y = CY;
+
+    els.push({ type: 'text', x: CX, y, text: 'TODAY', font: 'sm', color: TNG.accent, datum: 'TL', id: 'v3_ov_today' });
+    y += 16;
+    els.push({ type: 'cost', x: CX, y, cost: d.todayCost, font: 'xl', color: TNG.text, datum: 'TL', id: 'v3_ov_todaycost' });
+    y += 42;
+    els.push({ type: 'text', x: CX, y, text: 'THIS MONTH', font: 'sm', color: TNG.accent, datum: 'TL', id: 'v3_ov_month' });
+    y += 16;
+    els.push({ type: 'cost', x: CX, y, cost: d.monthCost, font: 'lg', color: TNG.progress, datum: 'TL', id: 'v3_ov_monthcost' });
+    y += 36;
+    els.push({ type: 'hline', x: CX, y, w: CW, color: TNG.accent, id: 'v3_ov_sep1' });
+    y += 8;
+    els.push({ type: 'text', x: CX, y, text: 'COST BREAKDOWN', font: 'sm', color: TNG.accent, datum: 'TL', id: 'v3_ov_brkdwn' });
+    y += 16;
+
+    const modelColors = [TNG.accent, TNG.elbowBottom, TNG.progress, '#FF5555'];
+    const models = d.models || [{name: 'claude-sonnet-4-6', cost: 3.25}, {name: 'claude-opus-4-6', cost: 1.80}, {name: 'claude-haiku-4-5', cost: 0.15}];
+    const maxCost = Math.max(...models.map(m => m.cost), 0.01);
+    for (let i = 0; i < Math.min(models.length, 4); i++) {
+        const pct = models[i].cost / maxCost;
+        els.push({ type: 'progressBar', x: CX, y, w: CW, h: 8, pct, fg: modelColors[i % 4], bg: TNG.barTrack, id: `v3_ov_bar${i}` });
+        y += 10;
+        els.push({ type: 'text', x: CX, y, text: models[i].name.toUpperCase(), font: 'sm', color: TNG.textDim, datum: 'TL', id: `v3_ov_model${i}` });
+        y += 16;
+    }
+
+    // Donut gauges at bottom
+    if (CH > 280) {
+        const gaugeY = CY + CH - 60;
+        const gaugeR = 25;
+        els.push({ type: 'donutGauge', cx: CX + 40, cy: gaugeY, r: gaugeR, thk: 6, pct: 65, color: TNG.progress, pctFont: 'sm', pctColor: TNG.text, id: 'v3_ov_g1' });
+        els.push({ type: 'text', x: CX + 40, y: gaugeY + gaugeR + 8, text: 'INPUT', font: 'sm', color: TNG.textDim, datum: 'TC', id: 'v3_ov_g1lbl' });
+        els.push({ type: 'donutGauge', cx: CX + 120, cy: gaugeY, r: gaugeR, thk: 6, pct: 35, color: TNG.progress, pctFont: 'sm', pctColor: TNG.text, id: 'v3_ov_g2' });
+        els.push({ type: 'text', x: CX + 120, y: gaugeY + gaugeR + 8, text: 'OUTPUT', font: 'sm', color: TNG.textDim, datum: 'TC', id: 'v3_ov_g2lbl' });
+    }
+    return els;
+}
+
+function buildModelsV3(CX, CY, CW, CH) {
+    const d = sampleData;
+    const els = [];
+    let y = CY;
+    const models = d.tokenModels || [{name:'claude-sonnet-4-6', inp:125000, out:42000}, {name:'claude-opus-4-6', inp:85000, out:28000}, {name:'claude-haiku-4-5', inp:15000, out:5000}];
+    const maxT = Math.max(...models.map(m => m.inp + m.out), 1);
+
+    for (let i = 0; i < Math.min(models.length, 6); i++) {
+        const total = models[i].inp + models[i].out;
+        const pct = total / maxT;
+        els.push({ type: 'text', x: CX, y, text: models[i].name.toUpperCase(), font: 'sm', color: TNG.text, datum: 'TL', id: `v3_mod_n${i}` });
+        els.push({ type: 'text', x: CX + CW, y, text: formatCount(total), font: 'sm', color: TNG.accent, datum: 'TR', id: `v3_mod_v${i}` });
+        y += 14;
+        els.push({ type: 'progressBar', x: CX, y, w: CW, h: 6, pct, fg: TNG.progress, bg: TNG.barTrack, id: `v3_mod_b${i}` });
+        y += 14;
+    }
+    return els;
+}
+
+function buildCodeV3(CX, CY, CW, CH) {
+    const els = [];
+    let y = CY;
+
+    els.push({ type: 'text', x: CX, y, text: 'SESSIONS', font: 'sm', color: TNG.accent, datum: 'TL', id: 'v3_cc_sess_l' });
+    els.push({ type: 'text', x: CX + CW, y, text: '12', font: 'md', color: TNG.text, datum: 'TR', id: 'v3_cc_sess_v' });
+    y += 22;
+    els.push({ type: 'text', x: CX, y, text: 'LINES', font: 'sm', color: TNG.accent, datum: 'TL', id: 'v3_cc_lines_l' });
+    els.push({ type: 'text', x: CX + CW, y, text: '+1,240 / -380', font: 'sm', color: TNG.progress, datum: 'TR', id: 'v3_cc_lines_v' });
+    y += 18;
+    els.push({ type: 'statusRow', x: CX, y, w: CW, label: 'COMMITS', value: '8', color: TNG.accent, labelColor: TNG.textDim, id: 'v3_cc_commits' });
+    y += 16;
+    els.push({ type: 'statusRow', x: CX, y, w: CW, label: 'PULL REQS', value: '3', color: TNG.accent, labelColor: TNG.textDim, id: 'v3_cc_prs' });
+    y += 16;
+    els.push({ type: 'hline', x: CX, y, w: CW, color: TNG.accent, id: 'v3_cc_sep' });
+    y += 8;
+    els.push({ type: 'text', x: CX, y, text: 'EST. COST', font: 'sm', color: TNG.accent, datum: 'TL', id: 'v3_cc_cost_l' });
+    els.push({ type: 'cost', x: CX + CW, y, cost: 4.52, font: 'md', color: TNG.progress, datum: 'TR', id: 'v3_cc_cost_v' });
+    y += 24;
+    els.push({ type: 'text', x: CX, y, text: 'EDIT ACCEPTANCE', font: 'sm', color: TNG.accent, datum: 'TL', id: 'v3_cc_acc_l' });
+    y += 16;
+    els.push({ type: 'progressBar', x: CX, y, w: CW, h: 8, pct: 0.82, fg: TNG.progress, bg: TNG.barTrack, id: 'v3_cc_acc_bar' });
+    y += 12;
+    els.push({ type: 'text', x: CX + CW, y, text: '45/55', font: 'sm', color: TNG.textDim, datum: 'TR', id: 'v3_cc_acc_v' });
+
+    return els;
+}
+
+function buildStatusV3(CX, CY, CW, CH) {
+    const els = [];
+    let y = CY;
+
+    els.push({ type: 'text', x: CX, y, text: 'NETWORK', font: 'sm', color: TNG.accent, datum: 'TL', id: 'v3_st_net' });
+    y += 16;
+    els.push({ type: 'statusRow', x: CX, y, w: CW, label: 'WIFI', value: 'CONNECTED', color: TNG.statusOk, labelColor: TNG.textDim, id: 'v3_st_wifi' });
+    y += 14;
+    els.push({ type: 'statusRow', x: CX, y, w: CW, label: 'SIGNAL', value: '-52 dBm', color: TNG.text, labelColor: TNG.textDim, id: 'v3_st_rssi' });
+    y += 14;
+    els.push({ type: 'statusRow', x: CX, y, w: CW, label: 'IP', value: '192.168.1.222', color: TNG.text, labelColor: TNG.textDim, id: 'v3_st_ip' });
+    y += 18;
+    els.push({ type: 'hline', x: CX, y, w: CW, color: TNG.accent, id: 'v3_st_sep1' });
+    y += 6;
+    els.push({ type: 'text', x: CX, y, text: 'API', font: 'sm', color: TNG.accent, datum: 'TL', id: 'v3_st_api' });
+    y += 16;
+    els.push({ type: 'statusRow', x: CX, y, w: CW, label: 'STATUS', value: 'OK', color: TNG.statusOk, labelColor: TNG.textDim, id: 'v3_st_apist' });
+    y += 14;
+    els.push({ type: 'statusRow', x: CX, y, w: CW, label: 'LAST FETCH', value: '45s ago', color: TNG.text, labelColor: TNG.textDim, id: 'v3_st_fetch' });
+    y += 18;
+    els.push({ type: 'hline', x: CX, y, w: CW, color: TNG.accent, id: 'v3_st_sep2' });
+    y += 6;
+    els.push({ type: 'text', x: CX, y, text: 'SYSTEM', font: 'sm', color: TNG.accent, datum: 'TL', id: 'v3_st_sys' });
+    y += 16;
+    els.push({ type: 'statusRow', x: CX, y, w: CW, label: 'UPTIME', value: '2h 15m', color: TNG.text, labelColor: TNG.textDim, id: 'v3_st_up' });
+    y += 14;
+    els.push({ type: 'statusRow', x: CX, y, w: CW, label: 'FREE HEAP', value: '285K', color: TNG.text, labelColor: TNG.textDim, id: 'v3_st_heap' });
+    y += 18;
+
+    // Data cascade in remaining space
+    const cascadeH = CH - (y - CY);
+    if (cascadeH > 30) {
+        els.push({ type: 'dataCascade', x: CX, y, w: CW, h: cascadeH, color: TNG.textDim, id: 'v3_st_cascade' });
+    }
+
+    return els;
+}
+
+function buildClaudeAiV3(CX, CY, CW, CH) {
+    const d = sampleData;
+    const els = [];
+    let y = CY;
+
+    // 5-hour window (top half)
+    els.push({ type: 'text', x: CX, y, text: '5-HOUR WINDOW', font: 'sm', color: TNG.accent, datum: 'TL', id: 'v3_ai_5h_lbl' });
+    y += 16;
+    els.push({ type: 'text', x: CX, y, text: `${Math.round(d.fiveHour)}%`, font: 'xl', color: TNG.text, datum: 'TL', id: 'v3_ai_5h_pct' });
+    y += 44;
+    els.push({ type: 'progressBar', x: CX, y, w: CW, h: 10, pct: d.fiveHour / 100, fg: TNG.progress, bg: TNG.barTrack, id: 'v3_ai_5h_bar' });
+    y += 20;
+
+    els.push({ type: 'hline', x: CX, y, w: CW, color: TNG.accent, id: 'v3_ai_sep' });
+    y += 8;
+
+    // 7-day window (bottom half)
+    els.push({ type: 'text', x: CX, y, text: '7-DAY WINDOW', font: 'sm', color: TNG.accent, datum: 'TL', id: 'v3_ai_7d_lbl' });
+    y += 16;
+    els.push({ type: 'text', x: CX, y, text: `${Math.round(d.sevenDay)}%`, font: 'lg', color: TNG.progress, datum: 'TL', id: 'v3_ai_7d_pct' });
+    y += 34;
+    els.push({ type: 'progressBar', x: CX, y, w: CW, h: 10, pct: d.sevenDay / 100, fg: TNG.progress, bg: TNG.barTrack, id: 'v3_ai_7d_bar' });
+
+    return els;
+}
+
 let screenElements = [];
 let customElements = [[], [], [], [], [], [], []];
 let deletedElementIds = new Set();  // track deleted generated element IDs per-screen: "screenIdx:elementId"
@@ -1627,35 +1829,71 @@ function fillQuarterCircle(cx, cy, r, color, quadrant) {
 function drawLcarsFrame(page, totalPages, countdown) {
     const SW = SIDEBAR_W, R = ELBOW_R, TH = TOPBAR_H, BH = BOTBAR_H;
 
-    // Top-left elbow
-    drawRect(0, 0, SW, TH + R, 'CLR_AMBER');
-    drawRect(SW, 0, R, TH, 'CLR_AMBER');
-    fillQuarterCircle(SW, TH, R, 'CLR_BG', 2);
+    if (activeFirmware === 'v3') {
+        // ====== V3: lcars-esp32 TNG theme frame ======
+        // Top-left elbow — solid block
+        drawRect(0, 0, SW + R, TH + R, TNG.elbowTop);
 
-    // Top bar: peach pill-bar segment on the right (square left edge, rounded right cap)
-    const seg2X = 210;
-    const tbarY = 1, tbarH = TH - 2;
-    const tbarR = Math.floor(tbarH / 2);
-    drawRoundRect(seg2X, tbarY, SCR_W - seg2X, tbarH, tbarR, 'CLR_PEACH');
-    drawRect(seg2X, tbarY, tbarR, tbarH, 'CLR_PEACH');  // Square off left edge
+        // Top bar — continuous fill from elbow to pill
+        const seg2X = Math.floor(SCR_W * 0.57);
+        drawRect(SW + R, 0, seg2X - (SW + R), TH, TNG.barTop);
 
-    // Sidebar segments
-    const segTop = TH + R + 2;
-    const segBot = SCR_H - BH - R - 2;
-    const segH = segBot - segTop;
-    const segColors = ['CLR_SALMON', 'CLR_LAVENDER', 'CLR_BLUE'];
-    const eachH = Math.floor((segH - 4) / 3);
+        // CLAUDE.AI pill on right
+        const pillR = Math.floor(TH / 2);
+        const rightInset = 28;
+        drawRoundRect(seg2X, 0, SCR_W - rightInset - seg2X, TH, pillR, TNG.elbowTop);
+        drawRect(seg2X, 0, pillR, TH, TNG.elbowTop);
 
-    for (let i = 0; i < 3; i++) {
-        const sy = segTop + i * (eachH + 2);
-        drawRect(0, sy, SW - 4, eachH, segColors[i]);
-        drawRoundRect(SW - 8, sy, 8, eachH, 4, segColors[i]);
+        // 4-segment sidebar (TNG: peach, lavender, tomato, violet)
+        const segTop = TH + R + 2;
+        const segBot = SCR_H - BH - R - 2;
+        const segH = segBot - segTop;
+        const segCount = TNG.sidebar.length;
+        const eachH = Math.floor((segH - (segCount - 1) * 2) / segCount);
+        for (let i = 0; i < segCount; i++) {
+            const sy = segTop + i * (eachH + 2);
+            drawRect(0, sy, SW, eachH, TNG.sidebar[i]);
+        }
+
+        // Bottom-left elbow — solid block
+        drawRect(0, SCR_H - BH - R, SW + R, BH + R, TNG.elbowBottom);
+
+        // Bottom bar — continuous fill
+        drawRect(SW + R, SCR_H - BH, SCR_W - (SW + R) - rightInset, BH, TNG.barBottom);
+        // Bottom bar pill cap on right
+        drawRoundRect(SCR_W - rightInset - pillR * 2, SCR_H - BH, pillR * 2, BH, pillR, TNG.barBottom);
+
+    } else {
+        // ====== V1/V2: Original frame style ======
+        // Top-left elbow
+        drawRect(0, 0, SW, TH + R, 'CLR_AMBER');
+        drawRect(SW, 0, R, TH, 'CLR_AMBER');
+        fillQuarterCircle(SW, TH, R, 'CLR_BG', 2);
+
+        // Top bar: peach pill-bar segment on the right
+        const seg2X = 210;
+        const tbarY = 1, tbarH = TH - 2;
+        const tbarR = Math.floor(tbarH / 2);
+        drawRoundRect(seg2X, tbarY, SCR_W - seg2X, tbarH, tbarR, 'CLR_PEACH');
+        drawRect(seg2X, tbarY, tbarR, tbarH, 'CLR_PEACH');
+
+        // 3-segment sidebar
+        const segTop = TH + R + 2;
+        const segBot = SCR_H - BH - R - 2;
+        const segH = segBot - segTop;
+        const segColors = ['CLR_SALMON', 'CLR_LAVENDER', 'CLR_BLUE'];
+        const eachH = Math.floor((segH - 4) / 3);
+        for (let i = 0; i < 3; i++) {
+            const sy = segTop + i * (eachH + 2);
+            drawRect(0, sy, SW - 4, eachH, segColors[i]);
+            drawRoundRect(SW - 8, sy, 8, eachH, 4, segColors[i]);
+        }
+
+        // Bottom-left elbow
+        drawRect(0, SCR_H - BH - R, SW, BH + R, 'CLR_TAN');
+        drawRect(SW, SCR_H - BH, R, BH, 'CLR_TAN');
+        fillQuarterCircle(SW, SCR_H - BH, R, 'CLR_BG', 1);
     }
-
-    // Bottom-left elbow
-    drawRect(0, SCR_H - BH - R, SW, BH + R, 'CLR_TAN');
-    drawRect(SW, SCR_H - BH, R, BH, 'CLR_TAN');
-    fillQuarterCircle(SW, SCR_H - BH, R, 'CLR_BG', 1);
 
     // ========== BOTTOM BAR (decorative pills only — other elements are draggable) ==========
     const bbarY = SCR_H - BH + 1;
@@ -2477,13 +2715,28 @@ function updatePropsPanel() {
         html += `<label>Scale</label><input type="number" min="0.25" max="4" step="0.25" value="${sc}" onchange="setProp('scale', +this.value)">`;
     }
     if (el.color !== undefined) {
-        const cBorder = activeColorProp === 'color' ? 'border:1px solid #58a6ff' : '';
-        html += `<label>Color</label><input value="${el.color}" readonly onclick="activeColorProp='color';highlightPaletteSwatch(this.value);updatePropsPanel()" style="color:${clr(el.color)}; font-weight:bold; cursor:pointer; ${cBorder}">`;
+        const colorPresets = [
+            'CLR_AMBER', 'CLR_PEACH', 'CLR_SALMON', 'CLR_LAVENDER', 'CLR_BLUE',
+            'CLR_ORANGE', 'CLR_RED', 'CLR_SKY', 'CLR_TAN',
+            'CLR_TEXT_BRIGHT', 'CLR_TEXT_DIM', 'CLR_BAR_BG',
+            'CLR_STATUS_OK', 'CLR_STATUS_ERR'
+        ];
+        html += `<label>Color</label>`;
+        html += `<select onchange="setProp('color', this.value); activeColorProp='color'; updatePropsPanel()">`;
+        const isPreset = colorPresets.includes(el.color);
+        if (!isPreset) html += `<option value="${el.color}" selected>${el.color}</option>`;
+        for (const c of colorPresets) {
+            html += `<option value="${c}" ${el.color === c ? 'selected' : ''} style="color:${clr(c)}">${c}</option>`;
+        }
+        html += `</select>`;
+        html += `<label>Custom</label><input value="${el.color}" onchange="setProp('color', this.value); activeColorProp='color'; updatePropsPanel()" style="color:${clr(el.color)}; font-weight:bold;" placeholder="CLR_NAME or #hex">`;
     }
     if (el.value !== undefined && el.type === 'cost') {
         html += `<label>Value</label><input type="number" step="0.01" value="${el.value}" onchange="setProp('value', +this.value)">`;
     }
     if (el.type === 'donutGauge') {
+        const thk = el.thickness || 7;
+        html += `<label>Thickness</label><input type="number" min="2" max="30" value="${thk}" onchange="setProp('thickness', +this.value)">`;
         const pf = el.pctFont || 'md';
         html += `<label>Pct Font</label><select onchange="setProp('pctFont', this.value)">`;
         for (const f of Object.keys(FONTS)) {
@@ -2493,6 +2746,39 @@ function updatePropsPanel() {
         const pcVal = el.pctColor || 'CLR_TEXT_BRIGHT';
         const pBorder = activeColorProp === 'pctColor' ? 'border:1px solid #58a6ff' : '';
         html += `<label>Pct Color</label><input value="${pcVal}" readonly onclick="activeColorProp='pctColor';highlightPaletteSwatch(this.value);updatePropsPanel()" style="color:${clr(pcVal)}; font-weight:bold; cursor:pointer; ${pBorder}">`;
+    }
+
+    // Data Source binding (for gauge, bar, text, cost elements)
+    if (['donutGauge', 'progressBar', 'text', 'cost', 'statusRow'].includes(el.type)) {
+        const DATA_SOURCES = [
+            { id: 'none', label: 'None (static)' },
+            { id: 'ai_5h_pct', label: 'Claude.ai 5h %' },
+            { id: 'ai_7d_pct', label: 'Claude.ai 7d %' },
+            { id: 'ai_7d_opus_pct', label: 'Claude.ai 7d Opus %' },
+            { id: 'ai_7d_sonnet_pct', label: 'Claude.ai 7d Sonnet %' },
+            { id: 'cost_today', label: 'Today Cost ($)' },
+            { id: 'cost_month', label: 'Monthly Cost ($)' },
+            { id: 'tokens_input_pct', label: 'Input Tokens %' },
+            { id: 'tokens_output_pct', label: 'Output Tokens %' },
+            { id: 'cc_sessions', label: 'Code Sessions' },
+            { id: 'cc_lines_add', label: 'Lines Added' },
+            { id: 'cc_lines_rm', label: 'Lines Removed' },
+            { id: 'cc_commits', label: 'Commits' },
+            { id: 'cc_prs', label: 'Pull Requests' },
+            { id: 'cc_cost', label: 'Code Est. Cost ($)' },
+            { id: 'cc_edit_pct', label: 'Edit Accept %' },
+            { id: 'ai_5h_clock', label: 'Claude.ai 5h Clock' },
+            { id: 'ai_7d_clock', label: 'Claude.ai 7d Clock' },
+            { id: 'wifi_rssi', label: 'WiFi RSSI' },
+            { id: 'uptime', label: 'Uptime' },
+            { id: 'free_heap', label: 'Free Heap' },
+        ];
+        const ds = el.dataSource || 'none';
+        html += `<label>Data Source</label><select onchange="setProp('dataSource', this.value)">`;
+        for (const src of DATA_SOURCES) {
+            html += `<option value="${src.id}" ${ds === src.id ? 'selected' : ''}>${src.label}</option>`;
+        }
+        html += '</select>';
     }
 
     html += '</div>';
@@ -2863,19 +3149,25 @@ function switchFirmware(fw) {
     SCREEN_NAMES = [...fwDef.names];
     SCREEN_TITLES = [...fwDef.titles];
     SCREEN_BUILDERS = fwDef.builders;
-    TITLE_X = SIDEBAR_W + ELBOW_R + (fw === 'v2' ? 4 : 4);
+    recalcLayout();  // must recalc before setting TITLE_X (SIDEBAR_W/ELBOW_R change)
+    TITLE_X = SIDEBAR_W + ELBOW_R + 4;
+    TITLE_Y = (fw === 'v3') ? Math.floor(TOPBAR_H / 2) : 1;
     currentScreen = 0;
     selectedIdx = -1;
     customElements = SCREEN_NAMES.map(() => []);
     deletedElementIds = new Set();
-    recalcLayout();
     rebuildScreens(false);
     buildTabs();
     render();
     updatePropsPanel();
     // Show/hide export header button
     const exportBtn = document.getElementById('btnExport');
-    if (exportBtn) exportBtn.style.display = fw === 'v2' ? 'none' : '';
+    if (exportBtn) exportBtn.style.display = (fw === 'v2' || fw === 'v3' || fw === 'lcars') ? 'none' : '';
+    // V3/lcars only work on C6 — auto-select the board
+    if (fw === 'v3' || fw === 'lcars') {
+        document.getElementById('boardSelect').value = 'c6amoled';
+        document.getElementById('boardSelect').dispatchEvent(new Event('change'));
+    }
     // Try to load saved layout for this firmware version
     loadSavedLayout();
 }
@@ -3168,6 +3460,7 @@ function serializeElement(el) {
     if (el.scale !== undefined && el.scale !== 1) out.scale = el.scale;
     if (el.pctFont !== undefined) out.pctFont = el.pctFont;
     if (el.pctColor !== undefined) out.pctColor = el.pctColor;
+    if (el.dataSource !== undefined && el.dataSource !== 'none') out.dataSource = el.dataSource;
     return out;
 }
 
