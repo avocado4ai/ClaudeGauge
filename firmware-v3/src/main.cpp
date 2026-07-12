@@ -180,6 +180,7 @@ void setup() {
         LCARS_FONT_LG, LCARS_SUNFLOWER, LCARS_BLACK, MC_DATUM);
     LcarsFont::drawTextUpper(engine.sprite(), "INITIALIZING...", SCR_WIDTH / 2, SCR_HEIGHT / 2 + 20,
         LCARS_FONT_SM, LCARS_AMBER, LCARS_BLACK, MC_DATUM);
+    engine.update();
     delay(1500);
 
     // Init settings
@@ -273,6 +274,8 @@ void handleNavigation() {
     }
 #endif
     if (buttonHandler.isRefreshPressed()) {
+        state.is_fetching = true;
+        engine.update();
         fetchAllData();
         state.last_activity = millis();
     }
