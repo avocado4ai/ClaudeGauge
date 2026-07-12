@@ -4,7 +4,7 @@
 // Board-specific pin configuration
 // ============================================================
 
-#if defined(BOARD_TDISPLAY_S3)
+#if defined(BOARD_TDISPLAY_S3) || defined(BOARD_TDISPLAY_S3_NOTOUCH)
 
     // Buttons (active LOW, internal pull-up)
     #define BTN_LEFT    0     // GPIO 0  = BOOT button
@@ -21,12 +21,16 @@
     #define PIN_POWER_ON 15
     #define HAS_POWER_PIN 1
 
-    // Capacitive touch (CST816S via I2C)
-    #define HAS_TOUCH   1
-    #define TOUCH_SDA   18
-    #define TOUCH_SCL   17
-    #define TOUCH_INT   16
-    #define TOUCH_RST   21
+    // Capacitive touch (CST816S via I2C) — not present on NOTOUCH variant
+    #if defined(BOARD_TDISPLAY_S3_NOTOUCH)
+        #define HAS_TOUCH   0
+    #else
+        #define HAS_TOUCH   1
+        #define TOUCH_SDA   18
+        #define TOUCH_SCL   17
+        #define TOUCH_INT   16
+        #define TOUCH_RST   21
+    #endif
 
 #elif defined(BOARD_WAVESHARE_147)
 
@@ -102,5 +106,5 @@
     #define SD_CS       6
 
 #else
-    #error "No board defined! Add -DBOARD_TDISPLAY_S3, -DBOARD_WAVESHARE_147, or -DBOARD_C6_AMOLED to build_flags"
+    #error "No board defined! Add -DBOARD_TDISPLAY_S3, -DBOARD_TDISPLAY_S3_NOTOUCH, -DBOARD_WAVESHARE_147, or -DBOARD_C6_AMOLED to build_flags"
 #endif
