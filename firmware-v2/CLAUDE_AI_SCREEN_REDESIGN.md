@@ -38,6 +38,7 @@ large donut gauges with countdown clocks, vertical bars, divider, and full frame
 | Element          | X   | Y   | Details                                            |
 | ---------------- | --- | --- | -------------------------------------------------- |
 | 5h clock text    | 96  | 24  | LCARS_FONT_LG (28px), TC_DATUM, LCARS_WHITE        |
+| 5h window label  | 96  | 52  | builtin font 1 (8px), TC_DATUM, LCARS_TEXT_DIM, "5-HOUR" |
 | 5h donut gauge   | cx=96  | cy=100 | r=38, thickness=7, LCARS_ICE fg, LCARS_BAR_TRACK bg |
 | 5h pct text      | 96  | 96  | LCARS_FONT_MD, MC_DATUM centered in donut, white    |
 | 5h countdown bar | 144 | 24  | w=10, h=120, fills bottom-up, LCARS_ICE             |
@@ -47,6 +48,7 @@ large donut gauges with countdown clocks, vertical bars, divider, and full frame
 | Element          | X    | Y   | Details                                                  |
 | ---------------- | ---- | --- | -------------------------------------------------------- |
 | 7d clock text    | 244  | 24  | LCARS_FONT_LG (28px), TC_DATUM, LCARS_PEACH             |
+| 7d window label  | 244  | 52  | builtin font 1 (8px), TC_DATUM, LCARS_TEXT_DIM, "7-DAY" |
 | 7d donut gauge   | cx=244 | cy=100 | r=38, thickness=7, LCARS_LAVENDER fg, LCARS_BAR_TRACK bg |
 | 7d pct text      | 244  | 96  | LCARS_FONT_MD, MC_DATUM centered in donut, white         |
 | 7d countdown bar | 292  | 24  | w=10, h=120, fills bottom-up, LCARS_LAVENDER             |
