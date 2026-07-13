@@ -42,6 +42,12 @@ void ClaudeAiScreen::onDraw(TFT_eSprite& spr, const LcarsFrame::Rect& c) {
         LcarsFont::drawText(spr, clockBuf, V2_5H_CLOCK_X, V2_5H_CLOCK_Y,
                             V2_5H_CLOCK_FONT, V2_5H_CLOCK_COLOR, LCARS_BLACK, V2_5H_CLOCK_DATUM);
 
+        // Window label — clarifies which countdown this is (no label existed before)
+        spr.setTextFont(1);
+        spr.setTextDatum(TC_DATUM);
+        spr.setTextColor(LCARS_TEXT_DIM, LCARS_BLACK);
+        spr.drawString("5-HOUR", V2_5H_CLOCK_X, V2_5H_CLOCK_Y + 28);
+
         // Donut gauge
         LcarsWidgets::drawDonutGauge(spr, V2_CAI_5H_X, V2_CAI_5H_Y, V2_CAI_5H_R, V2_CAI_5H_T,
                                       pct5h, color5h, LCARS_BAR_TRACK);
@@ -73,6 +79,12 @@ void ClaudeAiScreen::onDraw(TFT_eSprite& spr, const LcarsFrame::Rect& c) {
         _formatCountdown(cai.seven_day.resets_at, clockBuf, sizeof(clockBuf));
         LcarsFont::drawText(spr, clockBuf, V2_7D_CLOCK_X, V2_7D_CLOCK_Y,
                             V2_7D_CLOCK_FONT, V2_7D_CLOCK_COLOR, LCARS_BLACK, V2_7D_CLOCK_DATUM);
+
+        // Window label — clarifies which countdown this is (no label existed before)
+        spr.setTextFont(1);
+        spr.setTextDatum(TC_DATUM);
+        spr.setTextColor(LCARS_TEXT_DIM, LCARS_BLACK);
+        spr.drawString("7-DAY", V2_7D_CLOCK_X, V2_7D_CLOCK_Y + 28);
 
         // Donut gauge
         LcarsWidgets::drawDonutGauge(spr, V2_CAI_7D_X, V2_CAI_7D_Y, V2_CAI_7D_R, V2_CAI_7D_T,

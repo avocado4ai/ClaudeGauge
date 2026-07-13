@@ -3,11 +3,18 @@
 // ============================================================
 
 #include <Arduino.h>
-#include <Wire.h>
-#include <Adafruit_XCA9554.h>
+// <FS.h> must be included before <lcars.h> (-> TFT_eSPI on T-Display-S3)
+// so "using namespace fs;" is established before TFT_eSPI sets
+// FS_NO_GLOBALS and re-includes FS.h (the include guard blocks
+// re-processing) — otherwise WebServer.h's bare "FS" reference fails.
+#include <FS.h>
+#if defined(BOARD_C6_AMOLED)
+  #include <Wire.h>
+  #include <Adafruit_XCA9554.h>
+#endif
 #include <lcars.h>
 
-#ifdef XPOWERS_CHIP_AXP2101
+#if defined(BOARD_C6_AMOLED) && defined(XPOWERS_CHIP_AXP2101)
   #include <XPowersLib.h>
 #endif
 
@@ -20,6 +27,7 @@
 #include "claude_ai_client.h"
 #include "settings_manager.h"
 #include "web_server.h"
+#include "button_handler.h"
 
 // Screen definitions
 #include "screens/setup_screen.h"
@@ -35,8 +43,12 @@
 // ============================================================
 // Display hardware
 // ============================================================
+#if defined(BOARD_C6_AMOLED)
 Arduino_ESP32QSPI* bus = nullptr;
 Arduino_SH8601*    display = nullptr;
+#else
+static TFT_eSPI tft;
+#endif
 
 // ============================================================
 // Engine + screens
@@ -74,6 +86,7 @@ static ApiClient       apiClient;
 static ClaudeAiClient  claudeAiClient;
 static SettingsManager settingsMgr;
 static ConfigWebServer webServer;
+static ButtonHandler   buttonHandler;
 static DeviceMode      deviceMode = MODE_SETUP;
 
 // Forward declarations
@@ -87,6 +100,7 @@ uint32_t getCountdownSec();
 // Display init
 // ============================================================
 void initDisplay() {
+#if defined(BOARD_C6_AMOLED)
     Wire.begin(TOUCH_SDA, TOUCH_SCL);
 
 #ifdef XPOWERS_CHIP_AXP2101
@@ -117,6 +131,9 @@ void initDisplay() {
     display->begin();
     display->fillScreen(0x0000);
     display->setBrightness(255);
+#endif
+    // TFT_eSPI boards (T-Display-S3): nothing to do here — engine.begin(tft)
+    // in setup() drives TFT_eSPI's own init sequence.
 }
 
 // ============================================================
@@ -132,20 +149,38 @@ void setup() {
     state.uptime_start = millis();
     state.last_activity = millis();
 
-    // Init button
-    pinMode(BTN_BOOT, INPUT_PULLUP);
+    // Init buttons
+    buttonHandler.init();
 
     // Init display + engine
     initDisplay();
+#if defined(BOARD_C6_AMOLED)
     engine.begin(display, SCR_WIDTH, SCR_HEIGHT);
+#else
+    engine.begin(tft);
+    #if defined(PIN_BL)
+        pinMode(PIN_BL, OUTPUT);
+        digitalWrite(PIN_BL, HIGH);
+        engine.setBLPin(PIN_BL);
+    #endif
+    #if HAS_POWER_PIN
+        pinMode(PIN_POWER_ON, OUTPUT);
+        digitalWrite(PIN_POWER_ON, HIGH);
+    #endif
+#endif
     engine.setTheme(LCARS_THEME_TNG);
 
     // Show a static splash (no animated boot — avoids flicker on direct-to-display)
+#if defined(BOARD_C6_AMOLED)
     display->fillScreen(0x0000);
-    LcarsFont::drawTextUpper(engine.sprite(), "CLAUDEGAUGE V3", 184, 200,
+#endif
+    // Centered relative to SCR_WIDTH/SCR_HEIGHT so the splash stays on-canvas
+    // regardless of board resolution (368x448 AMOLED vs 320x170 T-Display-S3).
+    LcarsFont::drawTextUpper(engine.sprite(), "CLAUDEGAUGE V3", SCR_WIDTH / 2, SCR_HEIGHT / 2 - 20,
         LCARS_FONT_LG, LCARS_SUNFLOWER, LCARS_BLACK, MC_DATUM);
-    LcarsFont::drawTextUpper(engine.sprite(), "INITIALIZING...", 184, 240,
+    LcarsFont::drawTextUpper(engine.sprite(), "INITIALIZING...", SCR_WIDTH / 2, SCR_HEIGHT / 2 + 20,
         LCARS_FONT_SM, LCARS_AMBER, LCARS_BLACK, MC_DATUM);
+    engine.update();
     delay(1500);
 
     // Init settings
@@ -226,14 +261,23 @@ void enterDashboardMode() {
 // Navigation (button + touch)
 // ============================================================
 void handleNavigation() {
-    // BOOT button: cycle screens
-    if (digitalRead(BTN_BOOT) == LOW) {
-        delay(200);  // debounce
-        if (digitalRead(BTN_BOOT) == LOW) {
-            currentDashScreen = (currentDashScreen + 1) % DASH_SCREEN_COUNT;
-            engine.setScreen(dashScreens[currentDashScreen]);
-            state.last_activity = millis();
-        }
+    if (buttonHandler.isNextPressed()) {
+        currentDashScreen = (currentDashScreen + 1) % DASH_SCREEN_COUNT;
+        engine.setScreen(dashScreens[currentDashScreen]);
+        state.last_activity = millis();
+    }
+#if HAS_TWO_BUTTONS
+    if (buttonHandler.isPrevPressed()) {
+        currentDashScreen = (currentDashScreen + DASH_SCREEN_COUNT - 1) % DASH_SCREEN_COUNT;
+        engine.setScreen(dashScreens[currentDashScreen]);
+        state.last_activity = millis();
+    }
+#endif
+    if (buttonHandler.isRefreshPressed()) {
+        state.is_fetching = true;
+        engine.update();
+        fetchAllData();
+        state.last_activity = millis();
     }
 }
 
@@ -368,6 +412,7 @@ void loop() {
 
     // Dashboard mode
     engine.update();
+    buttonHandler.update();
     handleNavigation();
     handleAutoRefresh();
     updateWiFiState();
