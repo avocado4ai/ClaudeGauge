@@ -51,6 +51,9 @@ pio run -e t-display -t upload   # build + flash over USB
 pio device monitor -b 115200     # serial log
 ```
 
+Once the board is running this firmware, further updates can be pushed wirelessly —
+see [OTA.md](OTA.md).
+
 See [HARDWARE.md](HARDWARE.md) for pinout and board details.
 
 ## Key files
