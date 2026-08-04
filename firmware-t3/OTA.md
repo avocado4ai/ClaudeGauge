@@ -31,15 +31,19 @@ or via `pio device monitor` on boot).
 
 ## Method 2 — Web upload (no PlatformIO needed)
 
-1. Open `http://<device-ip>/` in a browser (phone or laptop, same network).
-2. Scroll to **Firmware Update (OTA)**.
+1. Open `http://<device-ip>/` in a browser (phone or laptop, same network), go to the
+   **Firmware Update** tab.
+2. The browser will prompt for credentials — username `admin`, password is the
+   device's OTA/Admin password (default `claudegauge`, set on the **Setup** tab).
 3. Choose the `.bin` file (`.pio/build/t-display/firmware.bin` after a `pio run -e t-display`)
    and click **Upload & Flash**.
 4. The device reboots automatically once the upload finishes.
 
-This path does not check the OTA password (it goes through the existing config
-`WebServer`, not `ArduinoOTA`) — anyone on the LAN with access to the config page can
-flash it. Keep the device on a trusted network.
+This path is now protected with HTTP Basic Auth (see `src/web_server.cpp`,
+`mgmtServer::begin`) using the same password as `ArduinoOTA` — anyone without the
+password cannot flash over the web path anymore. Still keep the device on a trusted
+network, since Basic Auth over plain HTTP is only a deterrent against casual access,
+not a hardened defense against an on-path attacker.
 
 ## Why the partition scheme matters
 

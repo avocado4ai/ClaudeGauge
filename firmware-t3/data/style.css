@@ -1,0 +1,84 @@
+* { box-sizing: border-box; }
+body {
+  font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+  margin: 0;
+  background: #14141a;
+  color: #e8e8ef;
+}
+header {
+  background: #1e1e28;
+  padding: 12px 20px;
+  border-bottom: 2px solid #ff9944;
+}
+h1 { font-size: 18px; margin: 0 0 10px 0; color: #ffb066; }
+nav#tabs { display: flex; gap: 4px; }
+.tab-btn {
+  background: #2a2a36;
+  color: #ccc;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px 6px 0 0;
+  cursor: pointer;
+  font-size: 14px;
+}
+.tab-btn.active { background: #ff9944; color: #14141a; font-weight: 600; }
+main { padding: 20px; max-width: 900px; margin: 0 auto; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+form { display: flex; flex-direction: column; gap: 4px; max-width: 420px; }
+label { font-size: 12px; color: #999; margin-top: 8px; }
+input, select {
+  background: #24242e;
+  border: 1px solid #3a3a48;
+  color: #e8e8ef;
+  padding: 8px;
+  border-radius: 4px;
+  font-size: 14px;
+}
+button {
+  background: #3a3a48;
+  color: #e8e8ef;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  margin-top: 6px;
+}
+button.primary { background: #ff9944; color: #14141a; font-weight: 600; }
+button:disabled { opacity: 0.4; cursor: default; }
+.hint { font-size: 12px; color: #888; }
+code { background: #24242e; padding: 1px 5px; border-radius: 3px; }
+
+.pages-layout { display: flex; gap: 24px; flex-wrap: wrap; }
+.pages-list-col { min-width: 220px; }
+#pageList { list-style: none; margin: 0; padding: 0; }
+#pageList li {
+  background: #24242e;
+  border: 1px solid #3a3a48;
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  cursor: grab;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+#pageList li.selected { border-color: #ff9944; }
+#pageList li.dragging { opacity: 0.4; }
+#pageList li span.name { flex: 1; }
+
+#pageCanvas {
+  background: #000;
+  border: 1px solid #3a3a48;
+  max-width: 100%;
+}
+#widgetToolbar { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+#widgetProps { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 10px; }
+#widgetProps label { display: flex; flex-direction: column; font-size: 11px; margin-top: 0; }
+#widgetProps input, #widgetProps select { width: 110px; }
+
+table#buttonsTable { border-collapse: collapse; margin-bottom: 10px; }
+table#buttonsTable th, table#buttonsTable td { padding: 8px 14px; text-align: left; }
+table#buttonsTable select { min-width: 160px; }

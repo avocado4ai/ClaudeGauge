@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ClaudeGauge — Management</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header>
+  <h1>ClaudeGauge T-Display S3</h1>
+  <nav id="tabs">
+    <button class="tab-btn active" data-tab="setup">Setup</button>
+    <button class="tab-btn" data-tab="ota">Firmware Update</button>
+    <button class="tab-btn" data-tab="pages">Pages</button>
+    <button class="tab-btn" data-tab="buttons">Buttons</button>
+  </nav>
+</header>
+
+<main>
+  <!-- ==================== Setup ==================== -->
+  <section id="tab-setup" class="tab-panel active">
+    <form action="/save" method="POST">
+      <label>WiFi SSID</label>
+      <input name="ssid" placeholder="Leave blank to keep current">
+      <label>WiFi Password</label>
+      <input name="pass" type="password" placeholder="Leave blank to keep current">
+      <label>Claude.ai Session Key</label>
+      <input name="sessionkey" placeholder="Paste sessionKey cookie value">
+      <label>Proxy URL</label>
+      <input name="proxyurl" value="https://cloud-proxy-three.vercel.app">
+      <label>OTA / Admin Password</label>
+      <input name="otapass" type="password" placeholder="Used for OTA and this page's login">
+      <button type="submit" class="primary">Save &amp; Reboot</button>
+    </form>
+    <p class="hint">
+      Get the session key: claude.ai → DevTools → Application/Storage → Cookies →
+      <code>sessionKey</code>.<br>
+      This page and firmware updates are protected with HTTP Basic Auth —
+      username <code>admin</code>, password is the OTA/Admin password above
+      (default <code>claudegauge</code>).
+    </p>
+  </section>
+
+  <!-- ==================== OTA ==================== -->
+  <section id="tab-ota" class="tab-panel">
+    <form method="POST" action="/update" enctype="multipart/form-data">
+      <label>Firmware .bin</label>
+      <input type="file" name="update" required>
+      <button type="submit" class="primary">Upload &amp; Flash</button>
+    </form>
+    <p class="hint">
+      Or flash wirelessly from PlatformIO: <code>pio run -e t-display-ota -t upload</code>
+    </p>
+  </section>
+
+  <!-- ==================== Pages ==================== -->
+  <section id="tab-pages" class="tab-panel">
+    <div class="pages-layout">
+      <div class="pages-list-col">
+        <h3>Pages <span class="hint">(drag to reorder)</span></h3>
+        <ul id="pageList"></ul>
+        <button id="addPageBtn">+ Add Page</button>
+      </div>
+      <div class="pages-editor-col">
+        <h3 id="editorTitle">Select a page</h3>
+        <canvas id="pageCanvas" width="720" height="405"></canvas>
+        <div id="widgetToolbar">
+          <select id="addWidgetType">
+            <option value="donutGauge">Donut Gauge</option>
+            <option value="bar">Bar</option>
+            <option value="text">Text</option>
+            <option value="clock7seg">7-Segment Clock</option>
+          </select>
+          <button id="addWidgetBtn">+ Add Widget</button>
+          <button id="deleteWidgetBtn" disabled>Delete Selected</button>
+        </div>
+        <div id="widgetProps"></div>
+      </div>
+    </div>
+    <button id="saveLayoutBtn" class="primary">Save Layout</button>
+    <span id="layoutStatus" class="hint"></span>
+  </section>
+
+  <!-- ==================== Buttons ==================== -->
+  <section id="tab-buttons" class="tab-panel">
+    <table id="buttonsTable">
+      <thead><tr><th></th><th>Short press</th><th>Long press (600ms+)</th></tr></thead>
+      <tbody>
+        <tr><td>BTN1</td>
+          <td><select id="btn1_short"></select></td>
+          <td><select id="btn1_long"></select></td>
+        </tr>
+        <tr><td>BTN2</td>
+          <td><select id="btn2_short"></select></td>
+          <td><select id="btn2_long"></select></td>
+        </tr>
+      </tbody>
+    </table>
+    <button id="saveButtonsBtn" class="primary">Save Button Mapping</button>
+    <span id="buttonsStatus" class="hint"></span>
+  </section>
+</main>
+
+<script src="/app.js"></script>
+</body>
+</html>

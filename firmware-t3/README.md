@@ -6,7 +6,7 @@ Firmware for a TTGO T-Display (ESP32) that acts as a desk gauge showing:
 - Home GPU / Ollama status (from a `gpu_server.py` running on the `shuli` server)
 - A 7-segment clock
 
-Cycle between screens with the two onboard buttons.
+Cycle between pages with the two onboard buttons (configurable — see below).
 
 ## How it works
 
@@ -21,15 +21,38 @@ Cycle between screens with the two onboard buttons.
   polls `shuli` (`192.168.1.118`) directly for GPU stats (`:8765/gpu`) and the running
   Ollama model (`:11434/api/ps`).
 - The backlight LED pulses when an Ollama model is actively loaded/running.
+- Pages and physical-button actions are data-driven (`/layout.json` and `/buttons.json`
+  on LittleFS), rendered at runtime by `layout_engine.cpp` — see **Management page**
+  below to edit them live, without reflashing.
 
-## Screens (cycled with BTN1 / BTN2)
+## Default pages (cycled with BTN1 / BTN2)
 
 1. **Main** — 5-hour and 7-day usage donuts with countdown timers.
 2. **Opus/Sonnet** — per-model usage bars (only meaningful on plans with model-specific limits).
 3. **Extra spend** — overage credit usage, if enabled on the account.
 4. **Ollama/GPU** — live GPU utilization, VRAM, temperature, and loaded model name from `shuli`.
 5. **Clock** — big 7-segment clock, synced via NTP once WiFi is up.
-6. **Status** — WiFi RSSI, uptime, last fetch time, IP address, button hints.
+6. **Status** — WiFi RSSI, uptime, last fetch time, IP address.
+
+These are just the built-in defaults — add, remove, reorder, or restyle pages from the
+management page's **Pages** tab.
+
+## Management page
+
+Open `http://<device-ip>/` for the on-device management page (served from LittleFS,
+`data/index.html` + `app.js` + `style.css`):
+
+- **Setup** — WiFi SSID/password, Claude session key, proxy URL, OTA/admin password.
+- **Firmware Update** — web-based OTA upload (`.bin` file), auth-protected.
+- **Pages** — add/delete pages, drag to reorder them, enable/disable, and edit each
+  page's widgets (gauges, bars, text, clock) on a visual canvas — changes apply live,
+  no reflash needed.
+- **Buttons** — map BTN1/BTN2 short-press and long-press (600ms+) to actions: next
+  page, previous page, jump to a specific page, or toggle the backlight.
+
+Every state-changing route (`/save`, `/update`, `/api/layout`, `/api/buttons`) is
+protected with HTTP Basic Auth — username `admin`, password is the OTA/Admin password
+(default `claudegauge`). See [OTA.md](OTA.md) for details.
 
 ## First-time setup
 
@@ -47,9 +70,14 @@ Cookies → copy the `sessionKey` value.
 Requires [PlatformIO](https://platformio.org/):
 
 ```bash
-pio run -e t-display -t upload   # build + flash over USB
-pio device monitor -b 115200     # serial log
+pio run -e t-display -t upload     # build + flash firmware over USB
+pio run -e t-display -t uploadfs   # flash the management page (data/) to LittleFS
+pio device monitor -b 115200       # serial log
 ```
+
+`uploadfs` only needs to be re-run when `data/index.html`/`app.js`/`style.css` change —
+firmware updates alone don't touch the LittleFS partition (and won't erase your saved
+`/layout.json` / `/buttons.json`).
 
 Once the board is running this firmware, further updates can be pushed wirelessly —
 see [OTA.md](OTA.md).
@@ -58,5 +86,10 @@ See [HARDWARE.md](HARDWARE.md) for pinout and board details.
 
 ## Key files
 
-- `src/main.cpp` — entire firmware (display, WiFi, HTTP fetch, web config, screen drawing).
+- `src/main.cpp` — display, WiFi, HTTP fetch, button/backlight loop.
+- `src/web_server.cpp` — management web page routes (setup, OTA, layout/buttons API).
+- `src/layout_engine.cpp` — JSON-driven page/widget rendering (`/layout.json`).
+- `src/button_actions.cpp` — JSON-driven button action mapping (`/buttons.json`).
+- `include/ui_helpers.h` — shared low-level TFT drawing primitives.
+- `data/` — the management page frontend (uploaded to LittleFS via `uploadfs`).
 - `platformio.ini` — board config, TFT_eSPI pin definitions, dependencies.

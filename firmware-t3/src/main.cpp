@@ -8,7 +8,12 @@
 #include <WebServer.h>
 #include <ArduinoOTA.h>
 #include <Update.h>
+#include <LittleFS.h>
 #include <time.h>
+
+#include "layout_engine.h"
+#include "button_actions.h"
+#include "web_server.h"
 
 #define BTN_1         35
 #define BTN_2          0
@@ -127,49 +132,6 @@ static uint32_t nextRefresh = 0;
 // Drawing Helpers
 // ============================================================
 
-static void drawDonut(int16_t cx, int16_t cy, int16_t r, int16_t t,
-                       float pct, uint16_t color) {
-    int16_t inner = r - t;
-    if (inner < 2) inner = 2;
-    dp->drawSmoothArc(cx, cy, r, inner, 0, 360, C_TRACK, C_BG, false);
-    if (pct <= 0) return;
-    if (pct > 1.0f) pct = 1.0f;
-    int32_t endAngle = 270 + (int32_t)(360.0f * pct);
-    if (endAngle > 630) endAngle = 630;
-    dp->drawSmoothArc(cx, cy, r, inner, 270, endAngle, color, C_BG, false);
-}
-
-static void drawCountdown(uint32_t resets_at, int16_t cx, int16_t cy) {
-    char buf[16];
-    if (resets_at == 0) {
-        snprintf(buf, sizeof(buf), "--:--");
-    } else {
-        int32_t rem = (int32_t)resets_at - (int32_t)time(nullptr);
-        if (rem <= 0) { snprintf(buf, sizeof(buf), "0:00"); }
-        else if (rem > 86400) {
-            uint32_t d = rem / 86400, h = (rem % 86400) / 3600;
-            snprintf(buf, sizeof(buf), "%lud %luh", (unsigned long)d, (unsigned long)h);
-        } else {
-            uint32_t h = rem / 3600, m = (rem % 3600) / 60, s = rem % 60;
-            if (h > 0) snprintf(buf, sizeof(buf), "%lu:%02lu", (unsigned long)h, (unsigned long)m);
-            else snprintf(buf, sizeof(buf), "%lu:%02lu", (unsigned long)m, (unsigned long)s);
-        }
-    }
-    dp->setTextDatum(TC_DATUM);
-    dp->setTextFont(4);
-    dp->setTextColor(C_WHITE, C_BG);
-    dp->drawString(buf, cx, cy);
-}
-
-static void drawPctInside(int16_t cx, int16_t cy, float pct, uint16_t color) {
-    char buf[8];
-    snprintf(buf, sizeof(buf), "%.0f%%", pct);
-    dp->setTextDatum(MC_DATUM);
-    dp->setTextFont(4);
-    dp->setTextColor(color, C_BG);
-    dp->drawString(buf, cx, cy);
-}
-
 static void drawTopBar() {
     dp->fillRect(0, 0, 240, TOPBAR_H, C_TOPBAR);
     dp->setTextDatum(TR_DATUM);
@@ -248,10 +210,6 @@ static void drawBottomBar(uint8_t screenIdx, uint8_t screenCount) {
     }
 }
 
-static void drawDivider() {
-    dp->fillRect(DIV_X, DIV_Y, 2, DIV_H, C_DIVIDER);
-}
-
 // ============================================================
 // 7-Segment Clock
 // ============================================================
@@ -318,27 +276,6 @@ static void drawBootClock() {
     draw7SegDigit(x, y, ss % 10, clr);
 }
 
-static void drawGaugeArea(const LimitData& lim, int16_t gx, int16_t gy,
-                           int16_t r, int16_t t, int16_t cdx, int16_t cdy,
-                           uint16_t color, const char* label) {
-    float pct = lim.utilization / 100.0f;
-    if (pct > 1.0f) pct = 1.0f;
-    uint16_t gaugeColor = color;
-    if (pct > 0.8f) gaugeColor = C_TOMATO;
-    else if (pct > 0.5f) gaugeColor = C_AMBER;
-
-    if (lim.present) {
-        drawCountdown(lim.resetsAt, cdx, cdy);
-        drawDonut(gx, gy, r, t, pct, gaugeColor);
-        drawPctInside(gx, gy, lim.utilization, C_WHITE);
-
-        dp->setTextDatum(TC_DATUM);
-        dp->setTextFont(1);
-        dp->setTextColor(C_DIM, C_BG);
-        dp->drawString(label, cdx, gy + r + 8);
-    }
-}
-
 static void drawLoading() {
     dp->fillRect(0, TOPBAR_H, 240, CONTENT_H, C_BG);
     dp->setTextDatum(MC_DATUM);
@@ -359,245 +296,54 @@ static void drawError() {
 // Screens
 // ============================================================
 
-static void screenMain(uint8_t idx, uint8_t total) {
-    drawTopBar();
-    dp->fillRect(0, TOPBAR_H, 240, CONTENT_H, C_BG);
-    drawDivider();
-    drawGaugeArea(limit5h,  L5_G_X, L5_G_Y, L5_G_R, L5_G_T, L5_CD_X, L5_CD_Y, C_AMBER,    "5-HOUR");
-    drawGaugeArea(limit7d,  R7_G_X, R7_G_Y, R7_G_R, R7_G_T, R7_CD_X, R7_CD_Y, C_LAVENDER, "7-DAY");
-    drawBottomBar(idx, total);
-}
+// ============================================================
+// Dispatch — pages/widgets are data-driven, see layout_engine.{h,cpp}.
+// ============================================================
+static uint8_t currentPageIndex = 0;
 
-static void screenOpusSonnet(uint8_t idx, uint8_t total) {
-    drawTopBar();
-    dp->fillRect(0, TOPBAR_H, 240, CONTENT_H, C_BG);
-    char buf[32];
+static layoutEngine::LayoutContext buildLayoutContext() {
+    layoutEngine::LayoutContext ctx;
+    ctx.limit5hPct = limit5h.utilization;
+    ctx.limit5hResetsAt = limit5h.resetsAt;
+    ctx.limit5hPresent = limit5h.present;
+    ctx.limit7dPct = limit7d.utilization;
+    ctx.limit7dResetsAt = limit7d.resetsAt;
+    ctx.limit7dPresent = limit7d.present;
+    ctx.limitOpusPct = limitOpus.utilization;
+    ctx.limitOpusPresent = limitOpus.present;
+    ctx.limitSonnetPct = limitSonnet.utilization;
+    ctx.limitSonnetPresent = limitSonnet.present;
 
-    dp->setTextDatum(TL_DATUM);
-    dp->setTextFont(2);
-    dp->setTextColor(C_DIM, C_BG);
-    dp->drawString("Opus", 8, TOPBAR_H + 8);
-    dp->setTextColor(C_WHITE, C_BG);
-    snprintf(buf, sizeof(buf), "%.0f%%", limitOpus.utilization);
-    dp->drawString(buf, 8, TOPBAR_H + 28);
+    ctx.extraEnabled = extraEnabled;
+    ctx.extraUsedUsd = extraUsed / 100.0f;
+    ctx.extraLimitUsd = extraLimit / 100.0f;
 
-    dp->setTextColor(C_DIM, C_BG);
-    dp->drawString("Sonnet", 8, TOPBAR_H + 52);
-    dp->setTextColor(C_WHITE, C_BG);
-    snprintf(buf, sizeof(buf), "%.0f%%", limitSonnet.utilization);
-    dp->drawString(buf, 8, TOPBAR_H + 72);
+    ctx.gpu.utilization = gpuInfo.utilization;
+    ctx.gpu.memUsed = gpuInfo.memUsed;
+    ctx.gpu.memTotal = gpuInfo.memTotal;
+    ctx.gpu.temp = gpuInfo.temp;
+    strncpy(ctx.gpu.name, gpuInfo.name, sizeof(ctx.gpu.name));
+    strncpy(ctx.ollamaModel, ollamaModel, sizeof(ctx.ollamaModel));
+    ctx.ollamaDataValid = ollamaDataValid;
+    ctx.ollamaError = ollamaError;
 
-    if (!limitOpus.present && !limitSonnet.present) {
-        dp->setTextDatum(MC_DATUM);
-        dp->setTextFont(2);
-        dp->setTextColor(C_DIM, C_BG);
-        dp->drawString("Not available for", 120, TOPBAR_H + 50);
-        dp->drawString("your plan", 120, TOPBAR_H + 68);
-    }
+    ctx.dataValid = dataValid;
+    ctx.apiError = apiError;
+    strncpy(ctx.lastError, lastError, sizeof(ctx.lastError));
+    strncpy(ctx.wifiIP, wifiIP, sizeof(ctx.wifiIP));
+    ctx.rssi = WiFi.RSSI();
+    ctx.uptimeMs = millis() - uptimeStart;
+    ctx.lastFetchMs = lastFetch > 0 ? (millis() - lastFetch) : 0;
 
-    // Simple horizontal bars
-    auto drawHBar = [](int y, float pct) {
-        if (pct > 100) pct = 100;
-        int w = (int)(100 * pct / 100.0f);
-        dp->drawRect(100, y, 110, 12, C_DIM);
-        if (w > 0) {
-            uint16_t c = (pct > 80) ? C_TOMATO : (pct > 50) ? C_AMBER : C_GREEN;
-            dp->fillRect(101, y + 1, w - 1, 11, c);
-        }
-    };
-    drawHBar(TOPBAR_H + 28, limitOpus.utilization);
-    drawHBar(TOPBAR_H + 72, limitSonnet.utilization);
-
-    drawBottomBar(idx, total);
-}
-
-static void screenExtra(uint8_t idx, uint8_t total) {
-    drawTopBar();
-    dp->fillRect(0, TOPBAR_H, 240, CONTENT_H, C_BG);
-    char buf[32];
-
-    if (extraEnabled) {
-        float used = extraUsed / 100.0f;
-        float limit = extraLimit / 100.0f;
-        dp->setTextDatum(TL_DATUM);
-        dp->setTextFont(2);
-        dp->setTextColor(C_DIM, C_BG);
-        dp->drawString("Extra Spend", 8, TOPBAR_H + 8);
-        dp->setTextColor(C_WHITE, C_BG);
-        if (extraLimit > 0) {
-            snprintf(buf, sizeof(buf), "$%.2f / $%.2f", used, limit);
-            dp->drawString(buf, 8, TOPBAR_H + 30);
-            float pct = (used / limit) * 100.0f;
-            if (pct > 100) pct = 100;
-            int w = (int)(200 * pct / 100.0f);
-            dp->drawRect(20, TOPBAR_H + 54, 200, 14, C_DIM);
-            uint16_t c = (pct > 80) ? C_TOMATO : (pct > 50) ? C_AMBER : C_GREEN;
-            if (w > 0) dp->fillRect(21, TOPBAR_H + 55, w - 1, 13, c);
-            snprintf(buf, sizeof(buf), "%.0f%% used", pct);
-            dp->setTextDatum(TC_DATUM);
-            dp->setTextFont(2);
-            dp->setTextColor(C_WHITE, C_BG);
-            dp->drawString(buf, 120, TOPBAR_H + 76);
-        } else {
-            snprintf(buf, sizeof(buf), "$%.2f (unlimited)", used);
-            dp->drawString(buf, 8, TOPBAR_H + 30);
-        }
-    } else {
-        dp->setTextDatum(MC_DATUM);
-        dp->setTextFont(2);
-        dp->setTextColor(C_DIM, C_BG);
-        dp->drawString("Extra spend off", 120, 68);
-    }
-    drawBottomBar(idx, total);
-}
-
-static void screenStatus(uint8_t idx, uint8_t total) {
-    drawTopBar();
-    dp->fillRect(0, TOPBAR_H, 240, CONTENT_H, C_BG);
-    dp->setTextDatum(TL_DATUM);
-    dp->setTextFont(1);
-    char buf[32];
-
-    dp->setTextColor(dataValid ? C_GREEN : C_TOMATO, C_BG);
-    dp->drawString(dataValid ? "Data: OK" : apiError ? lastError : "Waiting...", 8, TOPBAR_H + 4);
-
-    dp->setTextColor(C_WHITE, C_BG);
-    snprintf(buf, sizeof(buf), "RSSI: %d dBm", WiFi.RSSI());
-    dp->drawString(buf, 8, TOPBAR_H + 16);
-    snprintf(buf, sizeof(buf), "Uptime: %lu min", (millis() - uptimeStart) / 60000);
-    dp->drawString(buf, 8, TOPBAR_H + 28);
-    if (lastFetch > 0) {
-        snprintf(buf, sizeof(buf), "Fetch: %lu s ago", (millis() - lastFetch) / 1000);
-        dp->drawString(buf, 8, TOPBAR_H + 40);
-    }
-    snprintf(buf, sizeof(buf), "IP: %s", wifiIP);
-    dp->drawString(buf, 8, TOPBAR_H + 52);
-
-    dp->setTextColor(C_DIM, C_BG);
-    dp->drawString("BTN1: next  BTN2: config", 8, TOPBAR_H + 68);
-
-    drawBottomBar(idx, total);
-}
-
-static void screenOllama(uint8_t idx, uint8_t total) {
-    drawTopBar();
-    dp->fillRect(0, TOPBAR_H, 240, CONTENT_H, C_BG);
-    char buf[64];
-
-    dp->setTextDatum(TL_DATUM);
-    dp->setTextFont(2);
-    dp->setTextColor(C_WHITE, C_BG);
-
-    if (ollamaError) {
-        dp->setTextColor(C_TOMATO, C_BG);
-        dp->drawString("Shuli not found", 8, TOPBAR_H + 8);
-        dp->setTextFont(1);
-        dp->setTextColor(C_DIM, C_BG);
-        dp->drawString("Run gpu_server.py on", 8, TOPBAR_H + 30);
-        dp->drawString("shuli, port 8765", 8, TOPBAR_H + 42);
-    } else if (!ollamaDataValid) {
-        dp->drawString("Fetching...", 8, TOPBAR_H + 8);
-    } else {
-        // Model
-        dp->setTextColor(C_DIM, C_BG);
-        dp->drawString("MODEL:", 8, TOPBAR_H + 4);
-        dp->setTextColor(C_ICE, C_BG);
-        dp->drawString(ollamaModel, 60, TOPBAR_H + 4);
-
-        // GPU Utilization bar
-        dp->setTextColor(C_DIM, C_BG);
-        dp->drawString("GPU:", 8, TOPBAR_H + 24);
-        float pct = gpuInfo.utilization;
-        int w = (int)(120 * constrain(pct, 0, 100) / 100.0f);
-        dp->drawRect(60, TOPBAR_H + 24, 120, 10, C_DIM);
-        if (w > 0) {
-            uint16_t c = (pct > 80) ? C_TOMATO : (pct > 50) ? C_AMBER : C_GREEN;
-            dp->fillRect(61, TOPBAR_H + 25, w - 1, 9, c);
-        }
-        snprintf(buf, sizeof(buf), "%.0f%%", pct);
-        dp->setTextColor(C_WHITE, C_BG);
-        dp->drawString(buf, 190, TOPBAR_H + 24);
-
-        // Memory
-        dp->setTextColor(C_DIM, C_BG);
-        dp->drawString("VRAM:", 8, TOPBAR_H + 40);
-        dp->setTextColor(C_WHITE, C_BG);
-        if (gpuInfo.memTotal > 0) {
-            float usedPct = (gpuInfo.memUsed / gpuInfo.memTotal) * 100.0f;
-            snprintf(buf, sizeof(buf), "%.0f / %.0f MiB", gpuInfo.memUsed, gpuInfo.memTotal);
-            dp->drawString(buf, 60, TOPBAR_H + 40);
-            int w2 = (int)(120 * constrain(usedPct, 0, 100) / 100.0f);
-            dp->drawRect(60, TOPBAR_H + 52, 120, 8, C_DIM);
-            if (w2 > 0) {
-                uint16_t c2 = (usedPct > 80) ? C_TOMATO : (usedPct > 50) ? C_AMBER : C_GREEN;
-                dp->fillRect(61, TOPBAR_H + 53, w2 - 1, 7, c2);
-            }
-        } else {
-            dp->drawString("N/A", 60, TOPBAR_H + 40);
-        }
-
-        // Temperature
-        dp->setTextColor(C_DIM, C_BG);
-        dp->drawString("TEMP:", 8, TOPBAR_H + 66);
-        dp->setTextColor(C_WHITE, C_BG);
-        snprintf(buf, sizeof(buf), "%.0f C", gpuInfo.temp);
-        dp->drawString(buf, 60, TOPBAR_H + 66);
-
-        // GPU name + time since last fetch
-        dp->setTextFont(1);
-        dp->setTextColor(C_DIM, C_BG);
-        dp->drawString(gpuInfo.name, 8, TOPBAR_H + 82);
-        snprintf(buf, sizeof(buf), "%lu s ago", (millis() - lastOllamaFetch) / 1000);
-        dp->drawString(buf, 160, TOPBAR_H + 82);
-    }
-
-    drawBottomBar(idx, total);
-}
-
-static void screenClock(uint8_t idx, uint8_t total) {
-    dp->fillRect(0, 0, 240, 135, C_BG);
     time_t now;
     time(&now);
     struct tm* ti = localtime(&now);
-    if (!ti) {
-        dp->setTextDatum(MC_DATUM);
-        dp->setTextFont(2);
-        dp->setTextColor(C_DIM, C_BG);
-        dp->drawString("Waiting for time...", 120, 68);
-        drawBottomBar(idx, total);
-        return;
-    }
-    int16_t x = 22, y = 26;
-    uint16_t clr = 0xF800;
-    draw7SegDigit(x, y, ti->tm_hour / 10, clr); x += 30;
-    draw7SegDigit(x, y, ti->tm_hour % 10, clr); x += 30;
-    dp->fillRect(x + 4, y + 14, 5, 5, clr);
-    dp->fillRect(x + 4, y + 30, 5, 5, clr);
-    x += 16;
-    draw7SegDigit(x, y, ti->tm_min / 10, clr); x += 30;
-    draw7SegDigit(x, y, ti->tm_min % 10, clr); x += 30;
-    dp->fillRect(x + 4, y + 14, 5, 5, clr);
-    dp->fillRect(x + 4, y + 30, 5, 5, clr);
-    x += 16;
-    draw7SegDigit(x, y, ti->tm_sec / 10, clr); x += 30;
-    draw7SegDigit(x, y, ti->tm_sec % 10, clr);
+    if (ti) { ctx.timeinfo = *ti; ctx.timeValid = true; }
 
-    dp->setTextDatum(MC_DATUM);
-    dp->setTextFont(1);
-    dp->setTextColor(C_DIM, C_BG);
-    char buf[16];
-    snprintf(buf, sizeof(buf), "Shuli %s", ollamaModel);
-    dp->drawString(buf, 120, 92);
-
-    drawBottomBar(idx, total);
+    return ctx;
 }
 
-// ============================================================
-// Dispatch
-// ============================================================
-enum Screen { SCR_MAIN, SCR_OPUS_SONNET, SCR_EXTRA, SCR_OLLAMA, SCR_CLOCK, SCR_STATUS, SCR_COUNT };
-static Screen currentScreen = SCR_MAIN;
-static unsigned long lastBtnPress = 0;
+static bool backlightOn = true;
 
 static void drawScreen() {
     // Double-buffer via sprite to eliminate flicker
@@ -637,17 +383,15 @@ static void drawScreen() {
     } else if (apiError && !dataValid) {
         drawTopBar();
         drawError();
-        drawBottomBar(currentScreen, SCR_COUNT);
+        drawBottomBar(currentPageIndex, layoutEngine::enabledPageCount());
     } else {
-        switch (currentScreen) {
-            case SCR_MAIN:        screenMain(0, SCR_COUNT); break;
-            case SCR_OPUS_SONNET: screenOpusSonnet(1, SCR_COUNT); break;
-            case SCR_EXTRA:       screenExtra(2, SCR_COUNT); break;
-            case SCR_OLLAMA:      screenOllama(3, SCR_COUNT); break;
-            case SCR_CLOCK:       screenClock(4, SCR_COUNT); break;
-            case SCR_STATUS:      screenStatus(5, SCR_COUNT); break;
-            default: break;
-        }
+        uint8_t total = layoutEngine::enabledPageCount();
+        if (currentPageIndex >= total) currentPageIndex = 0;
+        drawTopBar();
+        dp->fillRect(0, TOPBAR_H, 240, CONTENT_H, C_BG);
+        layoutEngine::LayoutContext ctx = buildLayoutContext();
+        layoutEngine::renderPage(dp, layoutEngine::enabledPageAt(currentPageIndex), ctx);
+        drawBottomBar(currentPageIndex, total);
     }
 
     if (useSprite) {
@@ -898,94 +642,12 @@ void setupWiFi() {
     }
 }
 
-void handleRoot() {
-    String html = R"rawliteral(
-<!DOCTYPE html><html><body style="font-family:sans-serif;max-width:400px;margin:20px">
-<h2>ClaudeGauge T-Display</h2>
-<form action="/save" method="POST">
-<label>WiFi SSID:</label><br><input name="ssid" style="width:100%"><br>
-<label>WiFi Pass:</label><br><input name="pass" type="password" style="width:100%"><br>
-<label>Session Key:</label><br>
-<input name="sessionkey" style="width:100%" placeholder="Paste from claude.ai cookie"><br>
-<label>Proxy URL:</label><br>
-<input name="proxyurl" value="https://cloud-proxy-three.vercel.app" style="width:100%"><br>
-<label>OTA Password:</label><br>
-<input name="otapass" type="password" style="width:100%" placeholder="Password for wireless updates"><br><br>
-<input type="submit" value="Save & Reboot" style="background:#ff9944;border:none;padding:10px;font-size:16px;width:100%">
-</form>
-<p style="font-size:12px;color:#666">
-Get session key: claude.ai → DevTools → Cookies → sessionKey<br>
-Or install the Claude Session Key Helper extension.
-</p>
-<hr>
-<h3>Firmware Update (OTA)</h3>
-<form method="POST" action="/update" enctype="multipart/form-data">
-<input type="file" name="update"><br><br>
-<input type="submit" value="Upload & Flash" style="background:#4488ff;border:none;padding:10px;font-size:16px;width:100%;color:white">
-</form>
-<p style="font-size:12px;color:#666">
-Or flash wirelessly from PlatformIO:<br>
-<code>pio run -e t-display-ota -t upload</code>
-</p></body></html>)rawliteral";
-    webServer.send(200, "text/html", html);
-}
-
-void handleSave() {
-    String ssid = webServer.arg("ssid");
-    String pass = webServer.arg("pass");
-    String sk = webServer.arg("sessionkey");
-    String pu = webServer.arg("proxyurl");
-    String ota = webServer.arg("otapass");
-    if (!ssid.isEmpty()) prefs.putString("wifi_ssid", ssid);
-    if (!pass.isEmpty()) prefs.putString("wifi_pass", pass);
-    if (!sk.isEmpty()) prefs.putString("session_key", sk);
-    if (!pu.isEmpty()) prefs.putString("proxy_url", pu);
-    if (!ota.isEmpty()) prefs.putString("ota_pass", ota);
-    webServer.send(200, "text/html", "<h2>Saved! Rebooting...</h2>");
-    delay(1000);
-    ESP.restart();
-}
-
-void handleNotFound() { webServer.send(404, "text/plain", "404"); }
+// Web config UI, WiFi/proxy/session save, and OTA web-upload now live in
+// mgmtServer (src/web_server.cpp), registered from startWebConfig() below.
 
 // ============================================================
 // OTA (over-the-air) updates
 // ============================================================
-void handleUpdateResult() {
-    if (Update.hasError()) {
-        webServer.send(200, "text/html", "<h2>Update failed</h2>");
-    } else {
-        webServer.send(200, "text/html", "<h2>Update OK, rebooting...</h2>");
-        delay(500);
-        ESP.restart();
-    }
-}
-
-void handleUpdateUpload() {
-    HTTPUpload& upload = webServer.upload();
-    if (upload.status == UPLOAD_FILE_START) {
-        Serial.printf("OTA web upload: %s\n", upload.filename.c_str());
-        dp->fillScreen(C_BG);
-        dp->setTextDatum(MC_DATUM);
-        dp->setTextFont(2);
-        dp->setTextColor(C_AMBER, C_BG);
-        dp->drawString("Web OTA update...", 120, 60);
-        if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
-            Update.printError(Serial);
-        }
-    } else if (upload.status == UPLOAD_FILE_WRITE) {
-        if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
-            Update.printError(Serial);
-        }
-    } else if (upload.status == UPLOAD_FILE_END) {
-        if (Update.end(true)) {
-            Serial.printf("OTA web upload success: %u bytes\n", upload.totalSize);
-        } else {
-            Update.printError(Serial);
-        }
-    }
-}
-
 void setupOTA() {
     ArduinoOTA.setHostname("claudegauge-td");
     if (!otaPassword.isEmpty()) ArduinoOTA.setPassword(otaPassword.c_str());
@@ -1024,10 +686,7 @@ void enterAPMode() {
 }
 
 void startWebConfig() {
-    webServer.on("/", handleRoot);
-    webServer.on("/save", HTTP_POST, handleSave);
-    webServer.on("/update", HTTP_POST, handleUpdateResult, handleUpdateUpload);
-    webServer.onNotFound(handleNotFound);
+    mgmtServer::begin(webServer, prefs, tft, otaPassword);
     webServer.begin();
     Serial.print("Web config at http://"); Serial.println(WiFi.localIP());
 }
@@ -1059,6 +718,12 @@ void setup() {
     proxyUrl = prefs.getString("proxy_url", "https://cloud-proxy-three.vercel.app");
     orgUuid = prefs.getString("org_uuid", "");
     otaPassword = prefs.getString("ota_pass", "claudegauge");
+
+    if (!LittleFS.begin(true)) {
+        Serial.println("LittleFS mount failed");
+    }
+    layoutEngine::begin();
+    buttonActions::begin();
 
     pinMode(BTN_1, INPUT);
     pinMode(BTN_2, INPUT_PULLUP);
@@ -1117,33 +782,32 @@ void loop() {
         fetchOllamaAndGpu();
     }
 
-    static bool lastBtn1 = false, lastBtn2 = false;
     bool btn1 = digitalRead(BTN_1) == HIGH;
     bool btn2 = digitalRead(BTN_2) == LOW;
 
-    if (btn1 && !lastBtn1 && millis() - lastBtnPress > 300) {
-        lastBtnPress = millis();
-        currentScreen = (Screen)((currentScreen + 1) % SCR_COUNT);
-    }
-    if (btn2 && !lastBtn2 && millis() - lastBtnPress > 300) {
-        lastBtnPress = millis();
-        currentScreen = (Screen)((currentScreen + 1) % SCR_COUNT);
-    }
-    lastBtn1 = btn1;
-    lastBtn2 = btn2;
+    bool pageChanged = false, toggleBacklight = false;
+    uint8_t newPageIndex = currentPageIndex;
+    buttonActions::poll(btn1, btn2, currentPageIndex, layoutEngine::enabledPageCount(),
+                        pageChanged, newPageIndex, toggleBacklight);
+    if (pageChanged) currentPageIndex = newPageIndex;
+    if (toggleBacklight) backlightOn = !backlightOn;
 
     drawScreen();
 
-    bool modelRunning = ollamaDataValid
-        && strcmp(ollamaModel, "(idle)") != 0
-        && strcmp(ollamaModel, "") != 0
-        && !ollamaError;
-    if (modelRunning) {
-        uint32_t phase = millis() % 1200;
-        int duty = (phase < 600) ? 48 : 255;
-        ledcWrite(0, duty);
+    if (!backlightOn) {
+        ledcWrite(0, 0);
     } else {
-        ledcWrite(0, 255);
+        bool modelRunning = ollamaDataValid
+            && strcmp(ollamaModel, "(idle)") != 0
+            && strcmp(ollamaModel, "") != 0
+            && !ollamaError;
+        if (modelRunning) {
+            uint32_t phase = millis() % 1200;
+            int duty = (phase < 600) ? 48 : 255;
+            ledcWrite(0, duty);
+        } else {
+            ledcWrite(0, 255);
+        }
     }
 
     delay(100);
